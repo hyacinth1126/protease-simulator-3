@@ -19,9 +19,15 @@ def read_raw_data(filename='mode_prep_raw_data/raw.csv'):
     """
     raw.csv/xlsx에서 원본 데이터 읽기 및 정리
     
-    - 첫 번째 행: 농도 값들 (각 농도가 mean, SD, N으로 3번 반복)
-    - 두 번째 행: 컬럼 헤더 (time_min, mean, SD, N, mean, SD, N, ...)
-    - 세 번째 행부터: 실제 데이터
+    지원하는 형식:
+    1. 기존 형식 (탭 구분):
+       - 첫 번째 행: 농도 값들 (각 농도가 mean, SD, N으로 3번 반복)
+       - 두 번째 행: 컬럼 헤더 (time_min, mean, SD, N, mean, SD, N, ...)
+       - 세 번째 행부터: 실제 데이터
+    
+    2. 새로운 형식 (쉼표 구분):
+       - 첫 번째 행: 헤더 (concentration_uM, min, RFU_min, SD, N)
+       - 데이터: 각 행이 농도, 시간, RFU, SD, N
     """
     # 파일 확장자 확인
     file_extension = filename.split('.')[-1].lower()
@@ -39,21 +45,43 @@ def read_raw_data(filename='mode_prep_raw_data/raw.csv'):
         
         # 세 번째 행부터 데이터로 읽기 (헤더 없이)
         df = pd.read_excel(filename, header=None, skiprows=[0, 1], engine='openpyxl')
+        
+        # 헤더 이름 설정
+        df.columns = header_names
     else:
-        # CSV 파일 읽기 (탭 구분자 사용)
-        # 첫 번째 행만 읽어서 농도 값 추출
-        first_row_df = pd.read_csv(filename, header=None, nrows=1, sep='\t')
-        concentration_row = first_row_df.iloc[0].values[1:]  # 첫 번째 컬럼(빈 값) 제외
+        # CSV 파일 읽기 - 형식 자동 감지
+        # 먼저 쉼표 구분자로 시도 (새 형식)
+        try:
+            df_test = pd.read_csv(filename, nrows=1)
+            # 새 형식 감지: concentration_uM, min, RFU_min 등의 컬럼이 있는지 확인
+            if 'concentration_uM' in df_test.columns or 'concentration' in df_test.columns:
+                # 새 형식: 첫 번째 행이 헤더
+                df = pd.read_csv(filename)
+                # 새 형식 처리
+                return _read_new_format_csv(df)
+        except:
+            pass
         
-        # 두 번째 행을 헤더로 읽기
-        header_row_df = pd.read_csv(filename, header=None, skiprows=[0], nrows=1, sep='\t')
-        header_names = header_row_df.iloc[0].values
+        # 기존 형식 시도 (탭 구분자)
+        try:
+            # 첫 번째 행만 읽어서 농도 값 추출
+            first_row_df = pd.read_csv(filename, header=None, nrows=1, sep='\t')
+            concentration_row = first_row_df.iloc[0].values[1:]  # 첫 번째 컬럼(빈 값) 제외
+            
+            # 두 번째 행을 헤더로 읽기
+            header_row_df = pd.read_csv(filename, header=None, skiprows=[0], nrows=1, sep='\t')
+            header_names = header_row_df.iloc[0].values
+            
+            # 세 번째 행부터 데이터로 읽기 (헤더 없이)
+            df = pd.read_csv(filename, header=None, skiprows=[0, 1], sep='\t')
+        except Exception as e:
+            # 탭 구분자 실패 시 쉼표 구분자로 재시도
+            df = pd.read_csv(filename)
+            # 새 형식 처리
+            return _read_new_format_csv(df)
         
-        # 세 번째 행부터 데이터로 읽기 (헤더 없이)
-        df = pd.read_csv(filename, header=None, skiprows=[0, 1], sep='\t')
-    
-    # 헤더 이름 설정
-    df.columns = header_names
+        # 헤더 이름 설정
+        df.columns = header_names
     
     # 첫 번째 컬럼이 시간
     time_col = df.columns[0]
@@ -118,6 +146,94 @@ def read_raw_data(filename='mode_prep_raw_data/raw.csv'):
         # 다음 농도로 (3개 컬럼씩: mean, SD, N)
         i += 3
         conc_idx += 1
+    
+    return data
+
+
+def _read_new_format_csv(df):
+    """
+    새로운 형식의 CSV 파일 읽기
+    형식: concentration_uM, min, RFU_min, SD, N
+    """
+    data = {}
+    
+    # 컬럼명 확인 및 정규화
+    conc_col = None
+    time_col = None
+    rfu_col = None
+    sd_col = None
+    
+    for col in df.columns:
+        col_lower = col.lower()
+        # 더 구체적인 매칭 (순서 중요)
+        if col_lower == 'min' or col_lower == 'time' or col_lower == 'time_min':
+            time_col = col
+        elif 'rfu' in col_lower or 'fluorescence' in col_lower or ('fl' in col_lower and 'intensity' in col_lower):
+            rfu_col = col
+        elif 'concentration' in col_lower or 'conc' in col_lower:
+            conc_col = col
+        elif col_lower == 'sd' or col_lower == 'std' or 'standard' in col_lower:
+            sd_col = col
+    
+    # 컬럼명이 정확히 일치하는 경우 우선 처리
+    if 'min' in df.columns:
+        time_col = 'min'
+    if 'concentration_uM' in df.columns:
+        conc_col = 'concentration_uM'
+    if 'RFU_min' in df.columns:
+        rfu_col = 'RFU_min'
+    if 'SD' in df.columns:
+        sd_col = 'SD'
+    
+    if conc_col is None or time_col is None or rfu_col is None:
+        raise ValueError(f"필수 컬럼을 찾을 수 없습니다. 발견된 컬럼: {df.columns.tolist()}")
+    
+    # 농도별로 그룹화
+    for conc_value in df[conc_col].unique():
+        if pd.isna(conc_value):
+            continue
+        
+        conc_subset = df[df[conc_col] == conc_value].copy()
+        
+        # 시간과 RFU 값 추출
+        times = pd.to_numeric(conc_subset[time_col].values, errors='coerce')
+        values = pd.to_numeric(conc_subset[rfu_col].values, errors='coerce')
+        
+        # SD 값 추출 (있는 경우)
+        if sd_col and sd_col in conc_subset.columns:
+            sd_values = pd.to_numeric(conc_subset[sd_col].values, errors='coerce')
+        else:
+            sd_values = None
+        
+        # NaN 제거
+        valid_mask = ~pd.isna(times) & ~pd.isna(values)
+        valid_times = times[valid_mask]
+        valid_values = values[valid_mask]
+        if sd_values is not None:
+            valid_sd = sd_values[valid_mask]
+        else:
+            valid_sd = None
+        
+        if len(valid_times) > 0:
+            # 농도 값 정규화 (uM 단위로 통일)
+            try:
+                conc_float = float(conc_value)
+            except:
+                conc_float = float(conc_value)
+            
+            # 컬럼명에 uM이 있으면 μM 단위로, 없으면 ug/mL 단위로
+            if 'um' in conc_col.lower() or 'uM' in conc_col or 'μM' in conc_col:
+                conc_name = f"{conc_float} μM"
+            else:
+                conc_name = f"{conc_float} ug/mL"
+            
+            data[conc_name] = {
+                'time': valid_times,
+                'value': valid_values,
+                'SD': valid_sd,
+                'concentration': conc_float,
+                'conc_name': conc_name
+            }
     
     return data
 

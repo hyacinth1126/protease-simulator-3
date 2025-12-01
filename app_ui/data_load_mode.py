@@ -1503,6 +1503,195 @@ def data_load_mode(st):
                         
                         st.plotly_chart(fig_norm, use_container_width=True)
                         
+                        # y=1에 도달하는 시간까지만 표시하는 플롯 추가
+                        if norm_data['k_obs'] is not None and norm_data['k_obs'] > 0:
+                            tau_scaled = norm_data['tau']
+                            if tau_scaled is not None and not np.isinf(tau_scaled) and tau_scaled > 0:
+                                # 변수 재정의 (스코프 문제 해결)
+                                F_max_scaled = 1.0  # 정규화된 값이므로 최종 F_max = 1.0
+                                initial_slope_scaled = norm_data['k_obs']  # 정규화된 데이터에서의 기울기
+                                v0_label_scaled = f"Initial linear region (v₀={v0:.2f} RFU/min)" if v0 is not None else "Initial linear region"
+                                
+                                # y=1에 도달하는 시간 찾기 (exponential 식 사용)
+                                # F(t) = 1.0 * (1 - exp(-k_obs * t)) = target_value
+                                # target_value = 0.99 (99%에 도달하는 시간)
+                                target_value = 0.99
+                                # 1 - exp(-k_obs * t) = target_value
+                                # exp(-k_obs * t) = 1 - target_value
+                                # -k_obs * t = ln(1 - target_value)
+                                # t = -ln(1 - target_value) / k_obs
+                                
+                                normalized_values = norm_data['normalized_values']
+                                times_norm = norm_data['times']
+                                
+                                # 실제 데이터에서 정규화된 값이 target_value 이상이 되는 첫 번째 시간 찾기
+                                t_y1 = None
+                                for i, val in enumerate(normalized_values):
+                                    if val >= target_value:
+                                        t_y1 = times_norm[i]
+                                        break
+                                
+                                # 찾지 못하면 exponential 식으로 계산 (실제 데이터 범위를 넘어서도 계산)
+                                if t_y1 is None:
+                                    # t = -ln(1 - target_value) / k_obs
+                                    # target_value = 0.99일 때: t = -ln(0.01) / k_obs ≈ 4.6 / k_obs ≈ 4.6 * tau
+                                    t_y1 = -np.log(1 - target_value) / norm_data['k_obs']
+                                
+                                # t_display_max는 t_y1 사용 (t_max로 제한하지 않음 - 곡선 확장)
+                                t_display_max = t_y1
+                                
+                                # 구간 계산
+                                t_initial_scaled = 0.1 * tau_scaled
+                                t_exponential_start_scaled = 0.1 * tau_scaled
+                                t_exponential_end_scaled = 3.0 * tau_scaled
+                                t_plateau_scaled = 3.0 * tau_scaled
+                                t_exponential_mid_scaled = (t_exponential_start_scaled + t_exponential_end_scaled) / 2.0
+                                
+                                # y=1에 도달하는 시간까지만 플롯 생성 (원본 시간 스케일 유지)
+                                fig_norm_scaled = go.Figure()
+                                
+                                # Exponential fit 곡선 (t_display_max까지만)
+                                t_fit_scaled = np.linspace(t_min, t_display_max, 200)
+                                fit_curve_scaled = exponential_fit_simple(t_fit_scaled, F_max_scaled, norm_data['k_obs'])
+                                
+                                fig_norm_scaled.add_trace(go.Scatter(
+                                    x=t_fit_scaled,
+                                    y=fit_curve_scaled,
+                                    mode='lines',
+                                    name='Exponential increase (Full kinetics)',
+                                    line=dict(color='orange', width=2.5)
+                                ))
+                                
+                                # Initial linear region
+                                linear_curve_scaled = initial_slope_scaled * t_fit_scaled
+                                
+                                fig_norm_scaled.add_trace(go.Scatter(
+                                    x=t_fit_scaled,
+                                    y=linear_curve_scaled,
+                                    mode='lines',
+                                    name=v0_label_scaled,
+                                    line=dict(color='lightblue', width=2.5, dash='dash')
+                                ))
+                                
+                                # 구간별 세로선 표시
+                                if t_initial_scaled <= t_display_max:
+                                    fig_norm_scaled.add_vline(
+                                        x=t_initial_scaled,
+                                        line_dash="dash",
+                                        line_color="orange"
+                                    )
+                                    fig_norm_scaled.add_annotation(
+                                        x=t_initial_scaled,
+                                        y=1.05,
+                                        text="초기 구간 (t ≤ 0.1τ)",
+                                        showarrow=True,
+                                        arrowhead=2,
+                                        arrowsize=1,
+                                        arrowwidth=2,
+                                        arrowcolor="orange",
+                                        ax=0,
+                                        ay=-30,
+                                        bgcolor="rgba(0,0,0,0)",
+                                        bordercolor="rgba(0,0,0,0)",
+                                        borderwidth=0,
+                                        font=dict(size=11, color="white")
+                                    )
+                                
+                                if t_exponential_end_scaled <= t_display_max and t_initial_scaled <= t_display_max:
+                                    fig_norm_scaled.add_vline(
+                                        x=t_exponential_start_scaled,
+                                        line_dash="dash",
+                                        line_color="purple"
+                                    )
+                                    fig_norm_scaled.add_vline(
+                                        x=t_exponential_end_scaled,
+                                        line_dash="dash",
+                                        line_color="purple"
+                                    )
+                                    if t_exponential_mid_scaled <= t_display_max:
+                                        fig_norm_scaled.add_annotation(
+                                            x=t_exponential_mid_scaled,
+                                            y=1.10,
+                                            text="지수 구간 (0.1τ < t < 3τ)",
+                                            showarrow=True,
+                                            arrowhead=2,
+                                            arrowsize=1,
+                                            arrowwidth=2,
+                                            arrowcolor="purple",
+                                            ax=0,
+                                            ay=-30,
+                                            bgcolor="rgba(0,0,0,0)",
+                                            bordercolor="rgba(0,0,0,0)",
+                                            borderwidth=0,
+                                            font=dict(size=11, color="white")
+                                        )
+                                
+                                if t_plateau_scaled <= t_display_max:
+                                    fig_norm_scaled.add_vline(
+                                        x=t_plateau_scaled,
+                                        line_dash="dash",
+                                        line_color="brown"
+                                    )
+                                    if abs(t_plateau_scaled - t_exponential_end_scaled) < 0.001:
+                                        fig_norm_scaled.add_annotation(
+                                            x=t_plateau_scaled,
+                                            y=1.15,
+                                            text="Plateau 구간 (t ≥ 3τ)",
+                                            showarrow=True,
+                                            arrowhead=2,
+                                            arrowsize=1,
+                                            arrowwidth=2,
+                                            arrowcolor="brown",
+                                            ax=20,
+                                            ay=-30,
+                                            bgcolor="rgba(0,0,0,0)",
+                                            bordercolor="rgba(0,0,0,0)",
+                                            borderwidth=0,
+                                            font=dict(size=11, color="white")
+                                        )
+                                    else:
+                                        fig_norm_scaled.add_annotation(
+                                            x=t_plateau_scaled,
+                                            y=1.15,
+                                            text="Plateau 구간 (t ≥ 3τ)",
+                                            showarrow=True,
+                                            arrowhead=2,
+                                            arrowsize=1,
+                                            arrowwidth=2,
+                                            arrowcolor="brown",
+                                            ax=0,
+                                            ay=-30,
+                                            bgcolor="rgba(0,0,0,0)",
+                                            bordercolor="rgba(0,0,0,0)",
+                                            borderwidth=0,
+                                            font=dict(size=11, color="white")
+                                        )
+                                
+                                fig_norm_scaled.update_layout(
+                                    xaxis_title='Time (min)',
+                                    yaxis_title='Fluorescence intensity (a.u.)',
+                                    title='Enzyme-quenched peptide fluorescence kinetics (up to y=1)',
+                                    height=600,
+                                    template='plotly_white',
+                                    plot_bgcolor='rgba(0,0,0,0)',
+                                    paper_bgcolor='rgba(0,0,0,0)',
+                                    hovermode='x unified',
+                                    yaxis=dict(range=[0, 1.20]),
+                                    xaxis=dict(range=[t_min, t_display_max]),
+                                    legend=dict(
+                                        orientation="v",
+                                        yanchor="bottom",
+                                        y=0.05,
+                                        xanchor="right",
+                                        x=0.99,
+                                        bgcolor="rgba(0,0,0,0)",
+                                        bordercolor="rgba(0,0,0,0)",
+                                        borderwidth=0
+                                    )
+                                )
+                                
+                                st.plotly_chart(fig_norm_scaled, use_container_width=True)
+                        
                         # 방정식 및 R² 테이블
                         st.subheader("정규화 파라미터")
                         # 실험 타입에 따라 농도 단위 결정

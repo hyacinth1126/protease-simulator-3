@@ -87,6 +87,18 @@ def general_analysis_mode(st):
     df_fitted = None
     rfu_col = None
     
+    # 0순위: Session State 확인 (Data Load 모드에서 방금 실행된 경우)
+    if 'interpolation_results' in st.session_state and st.session_state.get('mm_data_ready', False):
+        try:
+            results = st.session_state['interpolation_results']
+            df_fitted = results['interp_df'].copy()
+            rfu_col = 'RFU_Interpolated' if 'RFU_Interpolated' in df_fitted.columns else 'RFU_Calculated'
+            st.sidebar.success("✅ Data Load 모드 결과 적용됨 (메모리)")
+            st.success("결과적용됨")
+        except Exception as e:
+            # 메모리 로드 실패 시 파일 로드 시도
+            pass
+
     if uploaded_file is not None:
         # 업로드된 파일 처리
         import tempfile
@@ -173,21 +185,31 @@ def general_analysis_mode(st):
         st.error("RFU 데이터 컬럼을 찾을 수 없습니다. (RFU_Calculated 또는 RFU_Interpolated)")
         st.stop()
     
-    # 엑셀 파일의 데이터를 변환
+    # 엑셀 파일의 데이터 변환
     df_raw_converted = []
     unique_times = sorted(df_fitted['Time_min'].unique())
+    
+    # 농도 컬럼 이름 감지 (우선순위: ug/mL -> uM -> Concentration)
+    conc_col_name = 'Concentration'
+    if 'Concentration [ug/mL]' in df_fitted.columns:
+        conc_col_name = 'Concentration [ug/mL]'
+    elif 'Concentration [μM]' in df_fitted.columns:
+        conc_col_name = 'Concentration [μM]'
+    elif 'Concentration' in df_fitted.columns:
+        conc_col_name = 'Concentration'
     
     for time in unique_times:
         time_data = df_fitted[df_fitted['Time_min'] == time]
         
         # Create row for each concentration
         for _, row in time_data.iterrows():
-            conc_ugml = row.get('Concentration [ug/mL]', 0)
+            conc_val = row.get(conc_col_name, 0)
             rfu = row[rfu_col]
             
             df_raw_converted.append({
                 'time_min': time,
-                'enzyme_ugml': conc_ugml,
+                'enzyme_ugml': conc_val,
+                'conc_col_name': conc_col_name, # 원래 컬럼 이름 저장
                 'FL_intensity': rfu,
                 'SD': 0  # 보간된 곡선 데이터는 SD 없음
             })
@@ -220,24 +242,66 @@ def general_analysis_mode(st):
     fitted_params = None
     xlsx_path_for_mm_results = None
     
-    # 업로드된 파일 또는 자동 로드된 파일 경로 확인
-    if uploaded_file is not None:
-        import tempfile
-        file_extension = uploaded_file.name.split('.')[-1].lower()
-        if file_extension == 'xlsx':
-            with tempfile.NamedTemporaryFile(delete=False, suffix='.xlsx', mode='wb') as tmp_file:
-                tmp_file.write(uploaded_file.getbuffer())
-                xlsx_path_for_mm_results = tmp_file.name
-    else:
-        # 자동 로드된 파일 경로 사용
-        xlsx_paths = [
-            'Michaelis-Menten_calibration_results.xlsx',
-            str(Path(__file__).parent.parent / 'Michaelis-Menten_calibration_results.xlsx'),
-        ]
-        for path in xlsx_paths:
-            if os.path.exists(path):
-                xlsx_path_for_mm_results = path
-                break
+    # 0순위: Session State 확인 (Data Load 모드에서 방금 실행된 경우)
+    if 'interpolation_results' in st.session_state and st.session_state.get('mm_data_ready', False):
+        try:
+            results = st.session_state['interpolation_results']
+            
+            # Normalization results에서 가져오기 (가장 정확함)
+            if 'normalization_results' in results:
+                fitted_params = {}
+                norm_results = results['normalization_results']
+                for conc_name, data in norm_results.items():
+                    conc_val = data['concentration']
+                    fitted_params[float(conc_val)] = {
+                        'F0': float(data['F0']),
+                        'Fmax': float(data['Fmax'])
+                    }
+            # 없으면 dataframe에서 가져오기
+            elif 'mm_results_df' in results:
+                df_mm = results['mm_results_df']
+                fitted_params = {}
+                # 농도 컬럼 찾기
+                conc_col = None
+                for col in df_mm.columns:
+                    if 'Concentration' in col:
+                        conc_col = col
+                        break
+                
+                if conc_col:
+                    for _, row in df_mm.iterrows():
+                        if pd.notna(row['F0']) and pd.notna(row['Fmax']):
+                            fitted_params[float(row[conc_col])] = {
+                                'F0': float(row['F0']),
+                                'Fmax': float(row['Fmax'])
+                            }
+            
+            if fitted_params and len(fitted_params) > 0:
+                st.session_state['fitted_params'] = fitted_params
+                st.sidebar.success(f"✅ 메모리에서 F0, Fmax 파라미터 적용됨 ({len(fitted_params)}개 농도)")
+        except Exception as e:
+            pass
+
+    # 메모리 로드가 안되었거나 강제 업로드된 파일이 있는 경우 파일 처리 로직 수행
+    if fitted_params is None:
+        # 업로드된 파일 또는 자동 로드된 파일 경로 확인
+        if uploaded_file is not None:
+            import tempfile
+            file_extension = uploaded_file.name.split('.')[-1].lower()
+            if file_extension == 'xlsx':
+                with tempfile.NamedTemporaryFile(delete=False, suffix='.xlsx', mode='wb') as tmp_file:
+                    tmp_file.write(uploaded_file.getbuffer())
+                    xlsx_path_for_mm_results = tmp_file.name
+        else:
+            # 자동 로드된 파일 경로 사용
+            xlsx_paths = [
+                'Michaelis-Menten_calibration_results.xlsx',
+                str(Path(__file__).parent.parent / 'Michaelis-Menten_calibration_results.xlsx'),
+            ]
+            for path in xlsx_paths:
+                if os.path.exists(path):
+                    xlsx_path_for_mm_results = path
+                    break
     
     # MM Results 시트 읽기
     if xlsx_path_for_mm_results is not None:
@@ -320,10 +384,15 @@ def general_analysis_mode(st):
         time_display = f"0 - {original_time_max:.0f} 초" if original_time_max < 100 else f"0 - {original_time_max/60:.1f} 분"
         time_label = "시간 (초)"
     # Determine concentration unit from normalized data
-    conc_col = df['conc_col_name'].iloc[0] if 'conc_col_name' in df.columns else 'enzyme_ugml'
-    if 'uM' in conc_col:
+    # conc_col_name 컬럼이 있으면 사용, 없으면 enzyme_ugml 사용
+    conc_col = 'enzyme_ugml'
+    
+    # 원래 컬럼 이름에 따른 단위 결정
+    original_conc_col = df['conc_col_name'].iloc[0] if 'conc_col_name' in df.columns else 'Concentration [ug/mL]'
+    
+    if 'uM' in original_conc_col:
         conc_unit = "μM"
-    elif 'nM' in conc_col:
+    elif 'nM' in original_conc_col:
         conc_unit = "nM"
     else:
         conc_unit = "μg/mL"
@@ -333,13 +402,14 @@ def general_analysis_mode(st):
     
     col1, col2 = st.columns(2)
     with col1:
-        st.metric(f"농도 조건 ({conc_unit})", df[conc_col].nunique())
+        # 중복 제거된 농도 조건 수 계산
+        unique_concs = sorted(df[conc_col].unique())
+        st.metric("농도 조건 수", len(unique_concs))
     with col2:
         st.metric("시간 범위", time_display)
     
     # Tabs for different views
-    tab1, tab2, tab3, tab4, tab5 = st.tabs([
-        "📈 원본 데이터", 
+    tab1, tab2, tab3, tab4 = st.tabs([
         "📊 정규화 데이터", 
         "🔬 모델 피팅",
         "📉 모델 비교",
@@ -347,82 +417,6 @@ def general_analysis_mode(st):
     ])
     
     with tab1:
-        # Data Load 모드와 동일한 그래프를 그리기 위해 원본 fitted 데이터 사용
-        if 'df_fitted_original' in st.session_state:
-            df_fitted_orig = st.session_state['df_fitted_original']
-            rfu_col = st.session_state.get('rfu_col', 'RFU_Interpolated')
-            
-            # Data Load 모드와 동일한 형식으로 그래프 생성
-            import plotly.graph_objects as go
-            fig_raw = go.Figure()
-            colors = ['blue', 'red', 'orange', 'green', 'purple', 'brown', 'pink', 'gray', 'olive', 'cyan']
-            
-            # 농도 순서대로 정렬
-            if 'Concentration [ug/mL]' in df_fitted_orig.columns:
-                conc_order = df_fitted_orig.sort_values('Concentration [ug/mL]')['Concentration'].unique()
-            else:
-                conc_order = df_fitted_orig['Concentration'].unique()
-            
-            for idx, conc_name in enumerate(conc_order):
-                color = colors[idx % len(colors)]
-                subset = df_fitted_orig[df_fitted_orig['Concentration'] == conc_name]
-                
-                if len(subset) > 0:
-                    fig_raw.add_trace(go.Scatter(
-                        x=subset['Time_min'],
-                        y=subset[rfu_col],
-                        mode='lines',
-                        name=conc_name,
-                        line=dict(color=color, width=2.5),
-                        legendgroup=conc_name,
-                        showlegend=True
-                    ))
-            
-            fig_raw.update_layout(
-                xaxis_title='Time (min)',
-                yaxis_title='RFU',
-                height=700,
-                template='plotly_white',
-                plot_bgcolor='rgba(0,0,0,0)',
-                paper_bgcolor='rgba(0,0,0,0)',
-                hovermode='x unified',
-                legend=dict(
-                    orientation="v",
-                    yanchor="bottom",
-                    y=0.05,
-                    xanchor="right",
-                    x=0.99,
-                    bgcolor="rgba(0,0,0,0)",
-                    bordercolor="rgba(0,0,0,0)",
-                    borderwidth=0,
-                    font=dict(color="white")
-                )
-            )
-            
-            # 원본 시간 범위로 xaxis 설정
-            original_time_max = st.session_state.get('original_time_max', df_fitted_orig['Time_min'].max())
-            fig_raw.update_xaxes(range=[0, original_time_max])
-            fig_raw.update_yaxes(rangemode='tozero')
-            
-            st.plotly_chart(fig_raw, use_container_width=True)
-        else:
-            # 기존 방식 (fallback)
-            fig_raw = Visualizer.plot_raw_data(df, conc_unit, time_label, 
-                                              use_lines=True,
-                                              enzyme_name=enzyme_name, 
-                                              substrate_name=substrate_name)
-            # 원본 시간 범위로 xaxis 설정
-            original_time_max = st.session_state.get('original_time_max', df['time_s'].max())
-            if time_unit == 'min':
-                fig_raw.update_xaxes(range=[0, original_time_max])
-            else:
-                fig_raw.update_xaxes(range=[0, original_time_max])
-            st.plotly_chart(fig_raw, use_container_width=True)
-        
-        st.subheader("Raw data table")
-        st.dataframe(df, height=400, use_container_width=True)
-    
-    with tab2:
         # Controls and method description for normalization
         st.subheader("정규화 설정 및 방법")
         
@@ -511,7 +505,7 @@ def general_analysis_mode(st):
         else:
             st.info("📊 각 농도별로 F(t) = F0 + A·(1-exp(-k·t)) 형태의 지수 함수를 피팅하여 점근선 Fmax를 결정합니다.")
     
-    with tab3:
+    with tab2:
         st.subheader("🔬 글로벌 모델 피팅")
         
         st.markdown("""
@@ -651,7 +645,7 @@ def general_analysis_mode(st):
             with result_container:
                 st.success("🎉 모든 모델 피팅 완료! '모델 비교' 탭에서 결과를 확인하세요.")
     
-    with tab4:
+    with tab3:
         if 'fit_results' in st.session_state:
             results = st.session_state['fit_results']
             df = st.session_state['df']
@@ -746,7 +740,7 @@ def general_analysis_mode(st):
         else:
             st.info("👈 먼저 '모델 피팅' 탭에서 피팅을 실행해주세요.")
     
-    with tab5:
+    with tab4:
         st.subheader("💡 진단 분석")
         
         # Initial rate analysis

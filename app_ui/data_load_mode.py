@@ -36,6 +36,7 @@ from data_interpolation_mode.interpolate_prism import (
     exponential_association,
     create_prism_interpolation_range
 )
+from scipy.optimize import curve_fit
 
 
 def detect_lines_and_points(image_array):
@@ -191,6 +192,120 @@ def extract_point_data_from_image(image_file, points):
     except Exception as e:
         st.error(f"점 데이터 추출 오류: {e}")
         return None
+
+
+def exponential_fit_simple(t, F_max, k_obs):
+    """
+    Exponential fit 모델: F(t) = F_max(1 - e^(-k_obs*t))
+    이미지에서 참고한 모델
+    """
+    return F_max * (1 - np.exp(-k_obs * t))
+
+
+def normalize_iterative(times, values, num_iterations=2):
+    """
+    반복 정규화 수행
+    
+    1차 정규화: F0 = value at time 0, Fmax = max(F)
+    2차 정규화: Exponential fit F(t) = F_max(1 - e^(-k_obs*t))
+    
+    Parameters:
+    - times: 시간 배열
+    - values: 형광값 배열
+    - num_iterations: 반복 횟수 (최소 2번)
+    
+    Returns:
+    - normalized_times: 정규화된 시간 배열
+    - normalized_values: 정규화된 형광값 배열
+    - F0: 최종 F0 값
+    - Fmax: 최종 Fmax 값
+    - k_obs: 최종 k_obs 값
+    - tau: 최종 τ = 1/k_obs 값
+    - r_squared: 최종 R² 값
+    - equation: 방정식 문자열
+    """
+    times = np.array(times)
+    values = np.array(values)
+    
+    # 정렬 (시간 순서대로)
+    sort_idx = np.argsort(times)
+    times = times[sort_idx]
+    values = values[sort_idx]
+    
+    # 초기값
+    current_values = values.copy()
+    F0 = None
+    Fmax = None
+    k_obs = None
+    tau = None
+    r_squared = 0
+    equation = ""
+    
+    # 반복 정규화 (최소 2번)
+    for iteration in range(max(2, num_iterations)):
+        # 1차 정규화: F0 = value at time 0, Fmax = max(F)
+        F0 = current_values[0]  # time이 0일 때의 값
+        Fmax = np.max(current_values)  # max(F)
+        
+        # 정규화: (F - F0) / (Fmax - F0)
+        if Fmax > F0:
+            normalized = (current_values - F0) / (Fmax - F0)
+        else:
+            normalized = current_values - F0
+        
+        # 2차 정규화: Exponential fit
+        # F(t) = F_max(1 - e^(-k_obs*t))
+        # 정규화된 데이터에 대해 피팅
+        try:
+            # 초기값 추정
+            F_max_init = 1.0  # 정규화된 값이므로 1.0
+            k_obs_init = 0.1  # 초기 추정값
+            
+            # Exponential fit
+            popt, pcov = curve_fit(
+                exponential_fit_simple,
+                times,
+                normalized,
+                p0=[F_max_init, k_obs_init],
+                bounds=([0.1, 0.001], [2.0, 10.0]),
+                maxfev=5000
+            )
+            
+            F_max_fit, k_obs_fit = popt
+            
+            # 피팅된 값 계산
+            fit_values = exponential_fit_simple(times, F_max_fit, k_obs_fit)
+            
+            # R² 계산
+            ss_res = np.sum((normalized - fit_values) ** 2)
+            ss_tot = np.sum((normalized - np.mean(normalized)) ** 2)
+            r_squared = 1 - (ss_res / ss_tot) if ss_tot > 0 else 0
+            
+            # τ = 1/k_obs
+            tau = 1.0 / k_obs_fit if k_obs_fit > 0 else np.inf
+            
+            k_obs = k_obs_fit
+            
+            # 방정식 생성
+            equation = f"F(t) = {F_max_fit:.4f}(1 - e^(-{k_obs_fit:.4f}*t)), τ = {tau:.4f}"
+            
+            # 다음 반복을 위해 피팅된 값을 역정규화하여 사용 (정규화 개선)
+            if iteration < max(2, num_iterations) - 1:  # 마지막 반복이 아니면
+                # 역정규화: fit_values * (Fmax - F0) + F0
+                if Fmax > F0:
+                    current_values = fit_values * (Fmax - F0) + F0
+                else:
+                    current_values = fit_values + F0
+            
+        except Exception as e:
+            # 피팅 실패 시 정규화된 값 유지
+            if iteration == 0:
+                # 첫 반복에서 실패하면 기본값 사용
+                k_obs = 0.1
+                tau = 10.0
+                equation = f"F(t) = {Fmax:.2f}(1 - e^(-{k_obs:.4f}*t)), τ = {tau:.4f} (피팅 실패)"
+    
+    return times, normalized, F0, Fmax, k_obs, tau, r_squared, equation
 
 
 def manual_data_entry(data_type="점"):
@@ -748,8 +863,37 @@ def data_load_mode(st):
                 except Exception as e:
                     st.sidebar.warning(f"⚠️ 파일 저장 중 오류: {e}")
                 
+                progress_bar.progress(0.9)
+                
+                # 6. 정규화 수행
+                status_text.text("6️⃣ 정규화 진행 중...")
+                
+                normalization_results = {}
+                for conc_name, data in raw_data.items():
+                    times = data['time']
+                    values = data['value']
+                    
+                    # 반복 정규화 수행 (최소 2번)
+                    norm_times, norm_values, F0, Fmax, k_obs, tau, r_sq, equation = normalize_iterative(
+                        times, values, num_iterations=2
+                    )
+                    
+                    normalization_results[conc_name] = {
+                        'concentration': data['concentration'],
+                        'times': norm_times,
+                        'normalized_values': norm_values,
+                        'F0': F0,
+                        'Fmax': Fmax,
+                        'k_obs': k_obs,
+                        'tau': tau,
+                        'R_squared': r_sq,
+                        'equation': equation,
+                        'original_times': times,
+                        'original_values': values
+                    }
+                
                 progress_bar.progress(1.0)
-                status_text.text("✅ Michaelis-Menten 모델 피팅 완료!")
+                status_text.text("✅ Michaelis-Menten 모델 피팅 및 정규화 완료!")
                 
                 # Session state에 저장
                 st.session_state['interpolation_results'] = {
@@ -766,7 +910,8 @@ def data_load_mode(st):
                         'concentrations': concentrations,
                         'v0_values': v0_values
                     },
-                    'experiment_type': experiment_type
+                    'experiment_type': experiment_type,
+                    'normalization_results': normalization_results  # 정규화 결과 추가
                 }
     
     # 결과 표시
@@ -827,9 +972,9 @@ def data_load_mode(st):
             exp_type = results.get('mm_fit_results', {}).get('experiment_type', 'Substrate 농도 변화 (표준 MM)')
             
             if exp_type == "Substrate 농도 변화 (표준 MM)":
-                tabs = ["📊 실험결과", "📈 초기속도", "📊 v₀ vs [S] MM Fit", "📋 Data Table"]
+                tabs = ["📊 실험결과", "🔄 정규화", "📈 초기속도", "📊 v₀ vs [S] MM Fit", "📋 Data Table"]
             else:
-                tabs = ["📊 실험결과", "📊 v₀ vs [E] Linear Fit", "📋 Data Table"]
+                tabs = ["📊 실험결과", "🔄 정규화", "📊 v₀ vs [E] Linear Fit", "📋 Data Table"]
             
             tab_objects = st.tabs(tabs)
             
@@ -927,9 +1072,183 @@ def data_load_mode(st):
                 
                 st.plotly_chart(fig, use_container_width=True)
             
-            # Tab 2: 초기속도 (Substrate 조건 실험일 때만)
+            # Tab 2: 정규화
+            norm_tab_idx = 1
+            with tab_objects[norm_tab_idx]:
+                st.subheader("🔄 정규화 결과")
+                
+                if 'normalization_results' in results and results['normalization_results']:
+                    norm_results = results['normalization_results']
+                    
+                    # 농도 순서 정렬
+                    conc_col = None
+                    for col in ['Concentration [μM]', 'Concentration [ug/mL]']:
+                        if col in results['mm_results_df'].columns:
+                            conc_col = col
+                            break
+                    
+                    if conc_col:
+                        conc_order = sorted(norm_results.keys(), 
+                                          key=lambda x: norm_results[x]['concentration'])
+                    else:
+                        conc_order = list(norm_results.keys())
+                    
+                    # 농도 선택 (옆으로 넘기기)
+                    if len(conc_order) > 0:
+                        # session_state를 사용하여 선택된 농도 인덱스 저장
+                        if 'normalization_selected_conc_idx' not in st.session_state:
+                            st.session_state['normalization_selected_conc_idx'] = 0
+                        
+                        conc_idx = st.selectbox(
+                            "농도 선택",
+                            range(len(conc_order)),
+                            index=st.session_state['normalization_selected_conc_idx'],
+                            format_func=lambda i: f"{conc_order[i]} ({norm_results[conc_order[i]]['concentration']})",
+                            key="normalization_tab_conc_select"
+                        )
+                        
+                        # 선택된 인덱스를 session_state에 저장
+                        st.session_state['normalization_selected_conc_idx'] = conc_idx
+                        
+                        selected_conc = conc_order[conc_idx]
+                        norm_data = norm_results[selected_conc]
+                        
+                        # 정규화된 데이터 플롯
+                        fig_norm = go.Figure()
+                        
+                        # 데이터 범위 계산
+                        t_min = norm_data['times'].min()
+                        t_max = norm_data['times'].max()
+                        
+                        # Exponential fit 곡선 (Full kinetics) - 주황색 실선
+                        if norm_data['k_obs'] is not None and norm_data['k_obs'] > 0:
+                            # X축을 데이터 범위로만 제한 (extrapolation 제거)
+                            t_fit = np.linspace(t_min, t_max, 200)
+                            F_max = 1.0  # 정규화된 값이므로 최종 F_max = 1.0
+                            fit_curve = exponential_fit_simple(t_fit, F_max, norm_data['k_obs'])
+                            
+                            fig_norm.add_trace(go.Scatter(
+                                x=t_fit,
+                                y=fit_curve,
+                                mode='lines',
+                                name='Exponential increase (Full kinetics)',
+                                line=dict(color='orange', width=2.5)
+                            ))
+                            
+                            # Initial linear region - 파란색 점선
+                            # t=0에서의 접선: F_linear(t) = k_obs * t (정규화된 데이터, F0=0)
+                            initial_slope = norm_data['k_obs']  # dF/dt at t=0 = F_max * k_obs = 1.0 * k_obs
+                            linear_curve = initial_slope * t_fit
+                            
+                            fig_norm.add_trace(go.Scatter(
+                                x=t_fit,
+                                y=linear_curve,
+                                mode='lines',
+                                name='Initial linear region',
+                                line=dict(color='lightblue', width=2.5, dash='dash')
+                            ))
+                            
+                            # 구간별 세로선 표시
+                            tau = norm_data['tau']
+                            if tau is not None and not np.isinf(tau) and tau > 0:
+                                # 초기 구간: t ≤ 0.1τ
+                                t_initial = 0.1 * tau
+                                # 지수 구간: 0.1τ ≤ t ≤ 3τ
+                                t_exponential_start = 0.1 * tau
+                                t_exponential_end = 3.0 * tau
+                                # Plateau 구간: t ≥ 3τ
+                                t_plateau = 3.0 * tau
+                                
+                                # 세로선 추가 (데이터 범위 내에 있는 경우만)
+                                if t_initial <= t_max:
+                                    fig_norm.add_vline(
+                                        x=t_initial,
+                                        line_dash="dash",
+                                        line_color="orange",
+                                        annotation_text="초기 구간 (t ≤ 0.1τ)",
+                                        annotation_position="top"
+                                    )
+                                if t_exponential_end <= t_max:
+                                    fig_norm.add_vline(
+                                        x=t_exponential_end,
+                                        line_dash="dash",
+                                        line_color="purple",
+                                        annotation_text="지수 구간 끝 (t = 3τ)",
+                                        annotation_position="top"
+                                    )
+                                if t_plateau <= t_max:
+                                    fig_norm.add_vline(
+                                        x=t_plateau,
+                                        line_dash="dash",
+                                        line_color="brown",
+                                        annotation_text="Plateau 구간 (t ≥ 3τ)",
+                                        annotation_position="top"
+                                    )
+                        
+                        fig_norm.update_layout(
+                            xaxis_title='Time (min)',
+                            yaxis_title='Fluorescence intensity (a.u.)',
+                            title='Enzyme-quenched peptide fluorescence kinetics',
+                            height=600,
+                            template='plotly_white',
+                            plot_bgcolor='rgba(0,0,0,0)',
+                            paper_bgcolor='rgba(0,0,0,0)',
+                            hovermode='x unified',
+                            # Y축 범위를 0-1로 고정 (정규화된 데이터)
+                            yaxis=dict(range=[0, 1.05]),  # 약간 여유를 두어 1.0이 잘 보이도록
+                            # X축 범위를 데이터 범위로 제한
+                            xaxis=dict(range=[t_min, t_max]),
+                            legend=dict(
+                                orientation="v",
+                                yanchor="bottom",
+                                y=0.05,
+                                xanchor="right",
+                                x=0.99,
+                                bgcolor="rgba(255,255,255,0.8)",
+                                bordercolor="rgba(0,0,0,0.2)",
+                                borderwidth=1
+                            )
+                        )
+                        
+                        st.plotly_chart(fig_norm, use_container_width=True)
+                        
+                        # 방정식 및 R² 테이블
+                        st.subheader("정규화 파라미터")
+                        param_data = {
+                            '농도': [selected_conc],
+                            'F₀': [f"{norm_data['F0']:.4f}"],
+                            'F_max': [f"{norm_data['Fmax']:.4f}"],
+                            'k_obs': [f"{norm_data['k_obs']:.4f}" if norm_data['k_obs'] is not None else "N/A"],
+                            'τ (1/k_obs)': [f"{norm_data['tau']:.4f}" if norm_data['tau'] is not None and not np.isinf(norm_data['tau']) else "N/A"],
+                            'R²': [f"{norm_data['R_squared']:.4f}"],
+                            '방정식': [norm_data['equation']]
+                        }
+                        param_df = pd.DataFrame(param_data)
+                        st.dataframe(param_df, use_container_width=True, hide_index=True)
+                        
+                        # 모든 농도 요약 테이블
+                        st.subheader("모든 농도 정규화 요약")
+                        summary_data = []
+                        for conc_name in conc_order:
+                            n_data = norm_results[conc_name]
+                            summary_data.append({
+                                '농도': conc_name,
+                                'F₀': f"{n_data['F0']:.4f}",
+                                'F_max': f"{n_data['Fmax']:.4f}",
+                                'k_obs': f"{n_data['k_obs']:.4f}" if n_data['k_obs'] is not None else "N/A",
+                                'τ': f"{n_data['tau']:.4f}" if n_data['tau'] is not None and not np.isinf(n_data['tau']) else "N/A",
+                                'R²': f"{n_data['R_squared']:.4f}",
+                                '방정식': n_data['equation'][:50] + "..." if len(n_data['equation']) > 50 else n_data['equation']
+                            })
+                        summary_df = pd.DataFrame(summary_data)
+                        st.dataframe(summary_df, use_container_width=True, hide_index=True)
+                        
+                else:
+                    st.info("정규화 결과가 없습니다. 먼저 'Michaelis-Menten Model 실행' 버튼을 클릭해주세요.")
+            
+            # Tab 3: 초기속도 (Substrate 조건 실험일 때만)
             if exp_type == "Substrate 농도 변화 (표준 MM)":
-                with tab_objects[1]:
+                with tab_objects[2]:
                     st.subheader("초기속도")
                     
                     # mm_results에서 linear_times와 linear_values 가져오기
@@ -1129,8 +1448,8 @@ def data_load_mode(st):
                         - 이는 MM 이론의 정석 기준으로, substrate가 거의 줄지 않고 product/inhibitor 영향이 없는 초기 구간의 속도를 측정합니다.
                         """)
             
-            # Tab 2 또는 3: v₀ vs 농도 그래프 (실험 조건에 따라 다름)
-            v0_tab_idx = 2 if exp_type == "Substrate 농도 변화 (표준 MM)" else 1
+            # Tab 4 또는 3: v₀ vs 농도 그래프 (실험 조건에 따라 다름)
+            v0_tab_idx = 3 if exp_type == "Substrate 농도 변화 (표준 MM)" else 2
             with tab_objects[v0_tab_idx]:
                 if 'v0_vs_concentration' in results and 'mm_fit_results' in results:
                     v0_data = results['v0_vs_concentration']
@@ -1244,7 +1563,7 @@ def data_load_mode(st):
                     st.warning("v₀ vs 농도 데이터가 없습니다.")
             
             # 마지막 탭: 데이터 테이블
-            data_tab_idx = 3 if exp_type == "Substrate 농도 변화 (표준 MM)" else 2
+            data_tab_idx = 4 if exp_type == "Substrate 농도 변화 (표준 MM)" else 3
             with tab_objects[data_tab_idx]:
                 st.subheader("상세 파라미터")
                 

@@ -547,6 +547,19 @@ def data_load_mode(st):
         - 구할 수 있는 파라미터: **kcat** 또는 **kcat/Km** (제한적)
         """)
     
+    # Enzyme 농도 입력 (kcat 계산용, Substrate 농도 변화 실험에서만 필요)
+    if experiment_type == "Substrate 농도 변화 (표준 MM)":
+        st.sidebar.subheader("🧪 Enzyme 농도 설정 (kcat 계산용)")
+        enzyme_conc_input = st.sidebar.number_input(
+            "Enzyme 농도 [E] (μg/mL)",
+            min_value=0.0,
+            value=51.43,
+            step=0.1,
+            help="kcat = Vmax / [E]_T 계산을 위해 필요합니다. 실험에서 사용한 효소 농도를 입력하세요."
+        )
+    else:
+        enzyme_conc_input = None
+    
     # Michaelis-Menten 모델 실행 버튼
     if st.button("🚀 Michaelis-Menten Model 실행", type="primary"):
             with st.spinner("Michaelis-Menten 모델 피팅 진행 중..."):
@@ -800,33 +813,43 @@ def data_load_mode(st):
                 
                 mm_results_df = pd.DataFrame(results_data)
                 
-                # 저장된 xlsx 파일에서 enzyme 농도 읽기 시도 (kcat 계산용)
+                # Enzyme 농도 가져오기 (kcat 계산용)
+                # 우선순위: 1) 사용자 입력값, 2) xlsx 파일에서 읽기
                 enzyme_conc = None
-                try:
-                    xlsx_path = 'Michaelis-Menten_calibration_results.xlsx'
-                    if os.path.exists(xlsx_path):
-                        df_mm_read = pd.read_excel(xlsx_path, sheet_name='MM Results', engine='openpyxl')
-                        # enzyme 농도 컬럼 찾기 (다양한 이름 시도)
-                        enzyme_conc_col = None
-                        for col in ['Enzyme [ug/mL]', 'Enzyme_ug/mL', 'enzyme_ug/mL', '[E] (ug/mL)', 'E_conc', 'Enzyme']:
-                            if col in df_mm_read.columns:
-                                enzyme_conc_col = col
-                                break
-                        
-                        if enzyme_conc_col is not None:
-                            # 첫 번째 유효한 enzyme 농도 값 사용
-                            enzyme_conc_values = df_mm_read[enzyme_conc_col].dropna()
-                            if len(enzyme_conc_values) > 0:
-                                enzyme_conc = float(enzyme_conc_values.iloc[0])
-                except Exception as e:
-                    # enzyme 농도 읽기 실패해도 계속 진행
-                    pass
+                
+                # 1) 사용자 입력값 확인
+                if experiment_type == "Substrate 농도 변화 (표준 MM)" and enzyme_conc_input is not None and enzyme_conc_input > 0:
+                    enzyme_conc = enzyme_conc_input
+                
+                # 2) xlsx 파일에서 읽기 시도 (사용자 입력값이 없을 때만)
+                if enzyme_conc is None:
+                    try:
+                        xlsx_path = 'Michaelis-Menten_calibration_results.xlsx'
+                        if os.path.exists(xlsx_path):
+                            df_mm_read = pd.read_excel(xlsx_path, sheet_name='MM Results', engine='openpyxl')
+                            # enzyme 농도 컬럼 찾기 (다양한 이름 시도)
+                            enzyme_conc_col = None
+                            for col in ['Enzyme [ug/mL]', 'Enzyme_ug/mL', 'enzyme_ug/mL', '[E] (ug/mL)', 'E_conc', 'Enzyme']:
+                                if col in df_mm_read.columns:
+                                    enzyme_conc_col = col
+                                    break
+                            
+                            if enzyme_conc_col is not None:
+                                # 첫 번째 유효한 enzyme 농도 값 사용
+                                enzyme_conc_values = df_mm_read[enzyme_conc_col].dropna()
+                                if len(enzyme_conc_values) > 0:
+                                    enzyme_conc = float(enzyme_conc_values.iloc[0])
+                    except Exception as e:
+                        # enzyme 농도 읽기 실패해도 계속 진행
+                        pass
                 
                 # kcat 계산: kcat = Vmax / [E]_T
                 if mm_fit_success and Vmax is not None and enzyme_conc is not None and enzyme_conc > 0:
                     kcat = Vmax / enzyme_conc
                 else:
                     kcat = None
+                    if experiment_type == "Substrate 농도 변화 (표준 MM)" and mm_fit_success and Vmax is not None:
+                        st.sidebar.warning("⚠️ kcat 계산을 위해 Enzyme 농도를 입력해주세요.")
                 
                 # MM 피팅 결과를 별도로 저장
                 mm_fit_results = {
@@ -869,6 +892,9 @@ def data_load_mode(st):
                 status_text.text("6️⃣ 정규화 진행 중...")
                 
                 normalization_results = {}
+                # 정규화 기반 v0 값들을 저장할 딕셔너리
+                norm_v0_values = {}
+                
                 for conc_name, data in raw_data.items():
                     times = data['time']
                     values = data['value']
@@ -877,6 +903,10 @@ def data_load_mode(st):
                     norm_times, norm_values, F0, Fmax, k_obs, tau, r_sq, equation = normalize_iterative(
                         times, values, num_iterations=2
                     )
+                    
+                    # 정규화 기반 v0 계산: v0 = k_obs * (Fmax - F0)
+                    v0_norm = k_obs * (Fmax - F0) if k_obs is not None and k_obs > 0 else 0
+                    norm_v0_values[conc_name] = v0_norm
                     
                     normalization_results[conc_name] = {
                         'concentration': data['concentration'],
@@ -889,26 +919,143 @@ def data_load_mode(st):
                         'R_squared': r_sq,
                         'equation': equation,
                         'original_times': times,
-                        'original_values': values
+                        'original_values': values,
+                        'v0': v0_norm  # 정규화 기반 v0 추가
                     }
+                
+                # 정규화 기반 v0으로 MM fit 다시 수행
+                status_text.text("7️⃣ 정규화 기반 v₀로 MM 피팅 재수행 중...")
+                
+                # 정규화 기반 v0 값들로 농도와 v0 데이터 수집
+                norm_concentrations = []
+                norm_v0_list = []
+                
+                for conc_name in sorted(normalization_results.keys(), 
+                                       key=lambda x: normalization_results[x]['concentration']):
+                    norm_concentrations.append(normalization_results[conc_name]['concentration'])
+                    norm_v0_list.append(normalization_results[conc_name]['v0'])
+                
+                # Enzyme 농도 가져오기 (kcat 계산용)
+                # 우선순위: 1) 사용자 입력값, 2) xlsx 파일에서 읽기
+                norm_enzyme_conc = None
+                
+                # 1) 사용자 입력값 확인
+                if experiment_type == "Substrate 농도 변화 (표준 MM)" and enzyme_conc_input is not None and enzyme_conc_input > 0:
+                    norm_enzyme_conc = enzyme_conc_input
+                
+                # 2) xlsx 파일에서 읽기 시도 (사용자 입력값이 없을 때만)
+                if norm_enzyme_conc is None:
+                    try:
+                        xlsx_path = 'Michaelis-Menten_calibration_results.xlsx'
+                        if os.path.exists(xlsx_path):
+                            df_mm_read = pd.read_excel(xlsx_path, sheet_name='MM Results', engine='openpyxl')
+                            # enzyme 농도 컬럼 찾기 (다양한 이름 시도)
+                            enzyme_conc_col = None
+                            for col in ['Enzyme [ug/mL]', 'Enzyme_ug/mL', 'enzyme_ug/mL', '[E] (ug/mL)', 'E_conc', 'Enzyme']:
+                                if col in df_mm_read.columns:
+                                    enzyme_conc_col = col
+                                    break
+                            
+                            if enzyme_conc_col is not None:
+                                # 첫 번째 유효한 enzyme 농도 값 사용
+                                enzyme_conc_values = df_mm_read[enzyme_conc_col].dropna()
+                                if len(enzyme_conc_values) > 0:
+                                    norm_enzyme_conc = float(enzyme_conc_values.iloc[0])
+                    except Exception as e:
+                        # enzyme 농도 읽기 실패해도 계속 진행
+                        pass
+                
+                # MM fit 재수행 (정규화 기반 v0 사용)
+                if experiment_type == "Substrate 농도 변화 (표준 MM)":
+                    if len(norm_concentrations) >= 2 and len(norm_v0_list) >= 2:
+                        try:
+                            cal_params, cal_fit_values, cal_equation = fit_calibration_curve(norm_concentrations, norm_v0_list)
+                            Vmax = cal_params['Vmax_cal']
+                            Km = cal_params['Km_cal']
+                            mm_r_squared = cal_params['R_squared']
+                            
+                            # kcat 계산: kcat = Vmax / [E]_T
+                            if Vmax is not None and norm_enzyme_conc is not None and norm_enzyme_conc > 0:
+                                kcat = Vmax / norm_enzyme_conc
+                            else:
+                                kcat = None
+                                if Vmax is not None:
+                                    st.sidebar.warning("⚠️ kcat 계산을 위해 Enzyme 농도를 입력해주세요.")
+                            
+                            mm_fit_success = True
+                            
+                            # mm_fit_results 업데이트
+                            mm_fit_results = {
+                                'Vmax': Vmax,
+                                'Km': Km,
+                                'kcat': kcat,
+                                'enzyme_conc': norm_enzyme_conc,
+                                'R_squared': mm_r_squared,
+                                'equation': cal_equation,
+                                'fit_success': mm_fit_success,
+                                'experiment_type': experiment_type,
+                                'slope': None
+                            }
+                        except Exception as e:
+                            st.warning(f"⚠️ 정규화 기반 MM 피팅 실패: {e}")
+                            mm_fit_success = False
+                    else:
+                        mm_fit_success = False
+                else:  # Enzyme 농도 변화
+                    if len(norm_concentrations) >= 2 and len(norm_v0_list) >= 2:
+                        try:
+                            # 선형 회귀
+                            coeffs = np.polyfit(norm_concentrations, norm_v0_list, 1)
+                            slope = coeffs[0]
+                            intercept = coeffs[1]
+                            
+                            # 피팅된 값
+                            v0_fitted = np.polyval(coeffs, norm_concentrations)
+                            
+                            # R² 계산
+                            ss_res = np.sum((norm_v0_list - v0_fitted) ** 2)
+                            ss_tot = np.sum((norm_v0_list - np.mean(norm_v0_list)) ** 2)
+                            mm_r_squared = 1 - (ss_res / ss_tot) if ss_tot > 0 else 0
+                            
+                            cal_equation = f"v₀ = {slope:.4f} * [E] + {intercept:.4f} (선형)"
+                            mm_fit_success = True
+                            
+                            # mm_fit_results 업데이트
+                            mm_fit_results = {
+                                'Vmax': None,
+                                'Km': None,
+                                'kcat': None,
+                                'enzyme_conc': None,
+                                'R_squared': mm_r_squared,
+                                'equation': cal_equation,
+                                'fit_success': mm_fit_success,
+                                'experiment_type': experiment_type,
+                                'slope': slope,
+                                'intercept': intercept
+                            }
+                        except Exception as e:
+                            st.warning(f"⚠️ 정규화 기반 선형 피팅 실패: {e}")
+                            mm_fit_success = False
+                    else:
+                        mm_fit_success = False
                 
                 progress_bar.progress(1.0)
                 status_text.text("✅ Michaelis-Menten 모델 피팅 및 정규화 완료!")
                 
-                # Session state에 저장
+                # Session state에 저장 (정규화 기반 v0 사용)
                 st.session_state['interpolation_results'] = {
                     'interp_df': interp_df,
                     'mm_results_df': mm_results_df,
-                    'mm_results': mm_results,  # 초기속도 탭용
-                    'mm_fit_results': mm_fit_results,
+                    'mm_results': mm_results,  # 초기속도 탭용 (원본 v0 유지)
+                    'mm_fit_results': mm_fit_results,  # 정규화 기반 MM fit 결과
                     'x_range_min': x_range_min,
                     'x_range_max': x_range_max,
                     'x_data_min': x_data_min,
                     'x_data_max': x_data_max,
                     'raw_data': raw_data,
                     'v0_vs_concentration': {
-                        'concentrations': concentrations,
-                        'v0_values': v0_values
+                        'concentrations': norm_concentrations,  # 정규화 기반 농도
+                        'v0_values': norm_v0_list  # 정규화 기반 v0
                     },
                     'experiment_type': experiment_type,
                     'normalization_results': normalization_results  # 정규화 결과 추가
@@ -973,7 +1120,7 @@ def data_load_mode(st):
             
             tab_titles = []
             if exp_type == "Substrate 농도 변화 (표준 MM)":
-                tab_titles = ["📊 실험결과", "🔄 정규화", "📊 v₀ vs [S] MM Fit", "📋 Data Table"]
+                tab_titles = ["📊 실험결과", "🔄 정규화", "📊 v₀ vs [S] Fit", "📋 Data Table"]
             else:
                 tab_titles = ["📊 실험결과", "🔄 정규화", "📊 v₀ vs [E] Linear Fit", "📋 Data Table"]
             
@@ -1064,17 +1211,29 @@ def data_load_mode(st):
                         ))
                         
                         # Error bars (SD가 있는 경우)
+                        # Substrate 조건: SD 표시 안 함 (모두 0이므로)
+                        # Enzyme 조건: SD가 0이 아닐 때만 표시
                         if raw_conc_data.get('SD') is not None:
                             sd_values = raw_conc_data['SD']
-                            fig.add_trace(go.Scatter(
-                                x=times_raw,
-                                y=values_raw,
-                                error_y=dict(type='data', array=sd_values, visible=True),
-                                mode='markers',
-                                marker=dict(size=0, opacity=0),
-                                legendgroup=conc_name,
-                                showlegend=False
-                            ))
+                            # 실험 타입에 따라 조건부 표시
+                            if exp_type == "Enzyme 농도 변화 (Substrate 고정)":
+                                # Enzyme 조건: SD가 0이 아닌 값이 하나라도 있으면 표시
+                                if isinstance(sd_values, (list, np.ndarray)):
+                                    has_nonzero_sd = np.any(np.array(sd_values) > 0)
+                                else:
+                                    has_nonzero_sd = sd_values > 0 if sd_values is not None else False
+                                
+                                if has_nonzero_sd:
+                                    fig.add_trace(go.Scatter(
+                                        x=times_raw,
+                                        y=values_raw,
+                                        error_y=dict(type='data', array=sd_values, visible=True),
+                                        mode='markers',
+                                        marker=dict(size=0, opacity=0),
+                                        legendgroup=conc_name,
+                                        showlegend=False
+                                    ))
+                            # Substrate 조건에서는 SD 표시 안 함
                 
                 fig.update_layout(
                     xaxis_title='Time (min)',
@@ -1542,18 +1701,100 @@ def data_load_mode(st):
             if selected_tab == tab_titles[data_tab_idx]:
                 st.subheader("상세 파라미터")
                 
-                # 상세 파라미터 테이블
-                detail_cols = ['Concentration [μM]', 'Concentration [ug/mL]', 'v0', 'F0', 'Fmax', 'R_squared', 'linear_fraction', 'Equation']
-                available_cols = [col for col in detail_cols if col in results['mm_results_df'].columns]
-                st.dataframe(results['mm_results_df'][available_cols], use_container_width=True, hide_index=True)
+                # 상세 파라미터 테이블 (정규화 기반 v0 사용)
+                # 정규화 결과에서 v0 가져오기
+                if 'normalization_results' in results and results['normalization_results']:
+                    norm_results = results['normalization_results']
+                    
+                    # 정규화 기반 v0으로 업데이트된 데이터프레임 생성
+                    detail_data = []
+                    for conc_name in sorted(norm_results.keys(), key=lambda x: norm_results[x]['concentration']):
+                        norm_data = norm_results[conc_name]
+                        conc_value = norm_data['concentration']
+                        
+                        # 정규화 기반 v0 계산
+                        v0_norm = norm_data.get('v0', 0)
+                        if v0_norm == 0 and norm_data.get('k_obs') is not None:
+                            v0_norm = norm_data['k_obs'] * (norm_data['Fmax'] - norm_data['F0'])
+                        
+                        # 실험 타입에 따라 농도 단위 결정
+                        if exp_type == "Substrate 농도 변화 (표준 MM)":
+                            conc_col_name = 'Concentration [μM]'
+                        else:
+                            conc_col_name = 'Concentration [ug/mL]'
+                        
+                        # mm_results에서 해당 농도 찾기
+                        mm_data = None
+                        for mm_conc_name, mm_params in results.get('mm_results', {}).items():
+                            if mm_params.get('concentration') == conc_value:
+                                mm_data = mm_params
+                                break
+                        
+                        row_data = {
+                            conc_col_name: conc_value,
+                            'v0': v0_norm,  # 정규화 기반 v0
+                            'F0': norm_data['F0'],
+                            'Fmax': norm_data['Fmax'],
+                            'R_squared': norm_data['R_squared'],
+                            'k_obs': norm_data.get('k_obs', None),
+                            'τ': norm_data.get('tau', None),
+                            '방정식': norm_data['equation']
+                        }
+                        
+                        detail_data.append(row_data)
+                    
+                    detail_df = pd.DataFrame(detail_data)
+                    st.dataframe(detail_df, use_container_width=True, hide_index=True)
+                else:
+                    # 정규화 결과가 없으면 기존 방식 사용
+                    detail_cols = ['Concentration [μM]', 'Concentration [ug/mL]', 'v0', 'F0', 'Fmax', 'R_squared', 'Equation']
+                    available_cols = [col for col in detail_cols if col in results['mm_results_df'].columns]
+                    st.dataframe(results['mm_results_df'][available_cols], use_container_width=True, hide_index=True)
+                
+                # MM Fit 결과 표시
+                st.markdown("---")
+                st.subheader("MM Fit 결과")
+                if 'mm_fit_results' in results and results['mm_fit_results'].get('fit_success'):
+                    mm_fit = results['mm_fit_results']
+                    if exp_type == "Substrate 농도 변화 (표준 MM)":
+                        mm_fit_data = {
+                            '파라미터': ['Vmax', 'Km (μM)', 'kcat', 'R²'],
+                            '값': [
+                                f"{mm_fit['Vmax']:.2f}" if mm_fit['Vmax'] is not None else "N/A",
+                                f"{mm_fit['Km']:.4f}" if mm_fit['Km'] is not None else "N/A",
+                                f"{mm_fit['kcat']:.2f}" if mm_fit['kcat'] is not None else "N/A",
+                                f"{mm_fit['R_squared']:.4f}"
+                            ]
+                        }
+                    else:
+                        mm_fit_data = {
+                            '파라미터': ['Slope', 'Intercept', 'R²'],
+                            '값': [
+                                f"{mm_fit.get('slope', 0):.4f}" if mm_fit.get('slope') is not None else "N/A",
+                                f"{mm_fit.get('intercept', 0):.4f}" if mm_fit.get('intercept') is not None else "N/A",
+                                f"{mm_fit['R_squared']:.4f}"
+                            ]
+                        }
+                    mm_fit_df = pd.DataFrame(mm_fit_data)
+                    st.dataframe(mm_fit_df, use_container_width=True, hide_index=True)
+                else:
+                    st.warning("MM Fit 결과가 없습니다.")
                 
                 # 파일 다운로드 버튼
                 st.markdown("---")
                 col1, col2 = st.columns(2)
                 
+                # 다운로드용 데이터프레임 결정
+                if 'normalization_results' in results and results['normalization_results']:
+                    download_df = detail_df  # 정규화 결과 포함
+                else:
+                    detail_cols = ['Concentration [μM]', 'Concentration [ug/mL]', 'v0', 'F0', 'Fmax', 'R_squared', 'linear_fraction', 'Equation']
+                    available_cols = [col for col in detail_cols if col in results['mm_results_df'].columns]
+                    download_df = results['mm_results_df'][available_cols]
+                
                 # MM Results CSV 다운로드
                 with col1:
-                    mm_results_csv = results['mm_results_df'][available_cols].to_csv(index=False)
+                    mm_results_csv = download_df.to_csv(index=False)
                     st.download_button(
                         label="📥 MM Results 다운로드 (CSV)",
                         data=mm_results_csv,
@@ -1569,8 +1810,74 @@ def data_load_mode(st):
                         from io import BytesIO
                         output = BytesIO()
                         with pd.ExcelWriter(output, engine='openpyxl') as writer:
-                            results['mm_results_df'][available_cols].to_excel(writer, sheet_name='MM Results', index=False)
-                            results['interp_df'].to_excel(writer, sheet_name='Michaelis-Menten Curves', index=False)
+                            download_df.to_excel(writer, sheet_name='MM Results', index=False)
+                            
+                            # Michaelis-Menten Curves 시트: Concentration 컬럼명 수정
+                            interp_df_copy = results['interp_df'].copy()
+                            # 'Concentration' 컬럼이 있으면 제거 (conc_unit_col 사용)
+                            if 'Concentration' in interp_df_copy.columns:
+                                interp_df_copy = interp_df_copy.drop(columns=['Concentration'])
+                            
+                            interp_df_copy.to_excel(writer, sheet_name='Michaelis-Menten Curves', index=False)
+                            
+                            # 정규화 결과 시트 추가
+                            if 'normalization_results' in results and results['normalization_results']:
+                                norm_results = results['normalization_results']
+                                norm_summary_data = []
+                                for conc_name in sorted(norm_results.keys(), key=lambda x: norm_results[x]['concentration']):
+                                    n_data = norm_results[conc_name]
+                                    conc_value = n_data['concentration']
+                                    v0_conc = n_data.get('v0', 0)
+                                    if v0_conc == 0 and n_data.get('k_obs') is not None:
+                                        v0_conc = n_data['k_obs'] * (n_data['Fmax'] - n_data['F0'])
+                                    
+                                    if exp_type == "Substrate 농도 변화 (표준 MM)":
+                                        conc_display = f"{conc_value} μM"
+                                    else:
+                                        conc_display = f"{conc_value} μg/mL"
+                                    
+                                    norm_summary_data.append({
+                                        '농도': conc_display,
+                                        'F₀': n_data['F0'],
+                                        'F_max': n_data['Fmax'],
+                                        'k_obs': n_data.get('k_obs', None),
+                                        'τ': n_data.get('tau', None),
+                                        'v₀ (RFU/min)': v0_conc,
+                                        'R²': n_data['R_squared'],
+                                        '방정식': n_data['equation']
+                                    })
+                                
+                                if norm_summary_data:
+                                    norm_summary_df = pd.DataFrame(norm_summary_data)
+                                    norm_summary_df.to_excel(writer, sheet_name='Normalization Results', index=False)
+                            
+                            # MM Fit 결과 시트 추가
+                            if 'mm_fit_results' in results and results['mm_fit_results'].get('fit_success'):
+                                mm_fit = results['mm_fit_results']
+                                if exp_type == "Substrate 농도 변화 (표준 MM)":
+                                    mm_fit_data = {
+                                        '파라미터': ['Vmax', 'Km (μM)', 'kcat', 'R²', '방정식'],
+                                        '값': [
+                                            mm_fit['Vmax'] if mm_fit['Vmax'] is not None else "N/A",
+                                            mm_fit['Km'] if mm_fit['Km'] is not None else "N/A",
+                                            mm_fit['kcat'] if mm_fit['kcat'] is not None else "N/A",
+                                            mm_fit['R_squared'],
+                                            mm_fit.get('equation', 'N/A')
+                                        ]
+                                    }
+                                else:
+                                    mm_fit_data = {
+                                        '파라미터': ['Slope', 'Intercept', 'R²', '방정식'],
+                                        '값': [
+                                            mm_fit.get('slope', None),
+                                            mm_fit.get('intercept', None),
+                                            mm_fit['R_squared'],
+                                            mm_fit.get('equation', 'N/A')
+                                        ]
+                                    }
+                                mm_fit_df = pd.DataFrame(mm_fit_data)
+                                mm_fit_df.to_excel(writer, sheet_name='MM Fit Results', index=False)
+                        
                         output.seek(0)
                         xlsx_data = output.getvalue()
                         
@@ -1587,7 +1894,7 @@ def data_load_mode(st):
                             file_name="Michaelis-Menten_calibration_results.xlsx",
                             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
                             use_container_width=True,
-                            help="MM Results와 Michaelis-Menten Curves 시트를 포함한 전체 엑셀 파일입니다."
+                            help="MM Results, Normalization Results, MM Fit Results, Michaelis-Menten Curves 시트를 포함한 전체 엑셀 파일입니다."
                         )
                     except Exception as e:
                         st.warning(f"XLSX 다운로드 준비 중 오류: {e}")

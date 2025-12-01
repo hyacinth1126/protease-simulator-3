@@ -51,18 +51,18 @@ def convert_xlsx_to_prep_raw(xlsx_path, output_path=None, n_value=50):
     first_row = df.iloc[0].values
     time_col_name = first_row[0]  # 'min' 또는 'time_min'
     
-    # 농도 값 추출
+    # 두 번째 행: 헤더 타입 (RFU, SD, N)
+    second_row = df.iloc[1].values
+    
+    # 농도 값 추출 (각 농도마다 3개 컬럼: RFU, SD, N)
     concentrations = []
-    for i in range(1, len(first_row), 2):  # RFU, SD 쌍으로 구성
+    for i in range(1, len(first_row), 3):  # RFU, SD, N 3개씩 구성
         if i < len(first_row):
             conc_value = extract_concentration_from_header(first_row[i])
             if conc_value is not None:
                 concentrations.append(conc_value)
     
     print(f"   발견된 농도: {concentrations}")
-    
-    # 두 번째 행: 헤더 타입 (RFU, SD)
-    second_row = df.iloc[1].values
     
     # 세 번째 행부터: 실제 데이터
     data_df = df.iloc[2:].copy()
@@ -94,20 +94,23 @@ def convert_xlsx_to_prep_raw(xlsx_path, output_path=None, n_value=50):
         
         data_line = [str(time_val)]
         
-        # 각 농도별로 데이터 추출
+        # 각 농도별로 데이터 추출 (RFU, SD, N 3개 컬럼씩)
         for i, conc in enumerate(concentrations):
-            # RFU 컬럼 인덱스 (1, 3, 5, 7, 9, ...)
-            rfu_col_idx = 1 + i * 2
-            # SD 컬럼 인덱스 (2, 4, 6, 8, 10, ...)
-            sd_col_idx = 2 + i * 2
+            # 각 농도마다 3개 컬럼: RFU, SD, N
+            # 컬럼 인덱스: 1+3*i (RFU), 2+3*i (SD), 3+3*i (N)
+            rfu_col_idx = 1 + i * 3
+            sd_col_idx = 2 + i * 3
+            n_col_idx = 3 + i * 3
             
-            if rfu_col_idx < len(data_df.columns) and sd_col_idx < len(data_df.columns):
+            if rfu_col_idx < len(data_df.columns) and sd_col_idx < len(data_df.columns) and n_col_idx < len(data_df.columns):
                 rfu_col = data_df.columns[rfu_col_idx]
                 sd_col = data_df.columns[sd_col_idx]
+                n_col = data_df.columns[n_col_idx]
                 
                 # 데이터 추출
                 rfu_value = data_df.iloc[idx, rfu_col_idx]
                 sd_value = data_df.iloc[idx, sd_col_idx]
+                n_value_actual = data_df.iloc[idx, n_col_idx]
                 
                 # NaN 처리
                 if pd.isna(rfu_value):
@@ -120,8 +123,20 @@ def convert_xlsx_to_prep_raw(xlsx_path, output_path=None, n_value=50):
                 else:
                     sd_str = str(sd_value)
                 
-                data_line.extend([rfu_str, sd_str, str(n_value)])
+                # N 값: 원본에서 읽은 값 사용, 없으면 기본값 사용
+                if pd.isna(n_value_actual):
+                    n_str = str(n_value)
+                else:
+                    # 숫자로 변환 시도
+                    try:
+                        n_num = int(float(n_value_actual))
+                        n_str = str(n_num)
+                    except:
+                        n_str = str(n_value)
+                
+                data_line.extend([rfu_str, sd_str, n_str])
             else:
+                # 컬럼이 없는 경우 기본값 사용
                 data_line.extend(['0', '0', str(n_value)])
         
         output_lines.append('\t'.join(data_line))

@@ -28,7 +28,7 @@ def verbose_callback(message: str, level: str = "info"):
 
 
 def general_analysis_mode(st):
-    """일반 분석 모드 - 표준 FRET 분석"""
+    """모델 시뮬레이션 모드 - 표준 FRET 분석"""
     
     # Sidebar configuration
     st.sidebar.title("⚙️ 설정")

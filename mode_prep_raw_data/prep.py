@@ -238,6 +238,116 @@ def _read_new_format_csv(df):
     return data
 
 
+def calculate_initial_velocity_optimized(times, values, min_points=3, conversion_threshold=0.1, skip_initial_points=0):
+    """
+    정확한 초기 속도 계산: 기질 전환율(conversion) ≤ 5–10% 구간만 사용
+    
+    FRET 기준: F(t)/F∞ ≤ 0.05–0.1 인 구간까지만 사용하여 linear regression 수행
+    
+    Parameters:
+    - times: 시간 배열 (분 또는 초)
+    - values: 형광값 배열
+    - min_points: 최소 데이터 포인트 수
+    - conversion_threshold: 전환율 임계값 (기본값: 0.1 = 10%)
+    - skip_initial_points: 초기 몇 개 포인트 건너뛰기 (lag/settling 제거용, 기본값: 0)
+    
+    Returns:
+    - v0: 초기 속도 (형광 단위/시간 단위)
+    - F0: 초기 형광값 (y절편)
+    - r_squared: 선형 피팅의 R²
+    - linear_times: 선형 구간 시간 배열
+    - linear_values: 선형 구간 형광값 배열
+    - conversion_used: 실제 사용된 전환율 (F(t)/F∞)
+    """
+    times = np.array(times)
+    values = np.array(values)
+    
+    # 정렬 (시간 순서대로)
+    sort_idx = np.argsort(times)
+    times = times[sort_idx]
+    values = values[sort_idx]
+    
+    if len(times) < min_points:
+        # 데이터 부족
+        F0 = values[0] if len(values) > 0 else 0
+        return 0, F0, 0, times, values, 0
+    
+    # F0와 Fmax (F∞) 구하기
+    F0 = values[0]  # 초기값
+    Fmax = np.max(values)  # 최대값 (F∞) - 충분히 오래 측정한 값
+    
+    if Fmax <= F0:
+        # 변화가 없음
+        return 0, F0, 0, times, values, 0
+    
+    # F(t)/F∞ ≤ conversion_threshold 인 구간 찾기
+    # conversion = (F(t) - F0) / (Fmax - F0)
+    # 이는 기질 전환율을 나타냄: 0% (F0) ~ 100% (Fmax)
+    
+    valid_indices = []
+    for i in range(skip_initial_points, len(values)):
+        F_t = values[i]
+        # 전환율 계산: (F(t) - F0) / (Fmax - F0)
+        # F0부터 Fmax까지의 변화 중 F(t)가 차지하는 비율
+        conversion = (F_t - F0) / (Fmax - F0)
+        
+        # 전환율이 임계값 이하인 구간만 사용
+        if conversion <= conversion_threshold:
+            valid_indices.append(i)
+        else:
+            # 임계값을 넘으면 중단 (10% 초과 구간은 사용하지 않음)
+            break
+    
+    # 최소 포인트 수 확인
+    if len(valid_indices) < min_points:
+        # 최소 포인트가 안 되면 가능한 만큼 사용 (하지만 경고)
+        if len(valid_indices) >= 2:
+            valid_indices = valid_indices
+        else:
+            # 데이터 부족
+            return 0, F0, 0, times, values, 0
+    
+    # 선형 구간 데이터
+    linear_times = times[valid_indices]
+    linear_values = values[valid_indices]
+    
+    # 실제 사용된 전환율 (마지막 포인트 기준)
+    if len(linear_values) > 0 and Fmax > F0:
+        last_F = linear_values[-1]
+        conversion_used = (last_F - F0) / (Fmax - F0)
+    else:
+        conversion_used = 0
+    
+    # 선형 피팅: F(t) = F0 + v0 * t
+    if len(linear_times) >= 2 and np.ptp(linear_times) > 0:
+        try:
+            coeffs = np.polyfit(linear_times, linear_values, 1)
+            v0 = coeffs[0]  # 기울기 = 초기 속도
+            F0_fit = coeffs[1]  # y절편 = 초기 형광값
+            
+            # R² 계산
+            fit_values = np.polyval(coeffs, linear_times)
+            ss_res = np.sum((linear_values - fit_values) ** 2)
+            ss_tot = np.sum((linear_values - np.mean(linear_values)) ** 2)
+            r_squared = 1 - (ss_res / ss_tot) if ss_tot > 0 else 0
+            
+            return v0, F0_fit, r_squared, linear_times, linear_values, conversion_used
+        except:
+            # 피팅 실패
+            if len(linear_times) >= 2:
+                v0 = (linear_values[-1] - linear_values[0]) / (linear_times[-1] - linear_times[0]) if linear_times[-1] != linear_times[0] else 0
+            else:
+                v0 = 0
+            return v0, F0, 0, linear_times, linear_values, conversion_used
+    else:
+        # 데이터 부족
+        if len(linear_times) >= 2:
+            v0 = (linear_values[-1] - linear_values[0]) / (linear_times[-1] - linear_times[0]) if linear_times[-1] != linear_times[0] else 0
+        else:
+            v0 = 0
+        return v0, F0, 0, linear_times, linear_values, conversion_used
+
+
 def calculate_initial_velocity(times, values, linear_fraction=0.2, min_points=3):
     """
     Quenched peptide protease kinetics: 초기 속도 계산
@@ -300,7 +410,7 @@ def calculate_initial_velocity(times, values, linear_fraction=0.2, min_points=3)
     return v0, F0, r_squared, linear_times, linear_values
 
 
-def fit_time_course(times, values, model='linear'):
+def fit_time_course(times, values, model='linear', use_optimized=True):
     """
     Quenched peptide protease kinetics: 초기 속도 계산
     
@@ -311,14 +421,23 @@ def fit_time_course(times, values, model='linear'):
     - times: 시간 배열
     - values: 형광값 배열
     - model: 'linear' (선형 구간 분석만 수행)
+    - use_optimized: True면 (F∞-F0)의 5-10% 범위에서 최적화, False면 기존 방식
     
     Returns:
     - params: 피팅 파라미터 딕셔너리 (v0, F0 포함)
     - fit_values: 선형 피팅된 값 (선형 구간만)
     - r_squared: 선형 피팅의 R²
     """
-    # 초기 속도 계산 (선형 구간 분석)
-    v0, F0, r_squared, linear_times, linear_values = calculate_initial_velocity(times, values)
+    # 초기 속도 계산
+    if use_optimized:
+        # 정확한 방법: F(t)/F∞ ≤ 0.1 (전환율 ≤ 10%) 구간만 사용
+        v0, F0, r_squared, linear_times, linear_values, conversion_used = calculate_initial_velocity_optimized(times, values)
+        optimal_percent = conversion_used * 100  # 퍼센트로 변환
+    else:
+        # 기존 방법: 고정된 linear_fraction 사용
+        v0, F0, r_squared, linear_times, linear_values = calculate_initial_velocity(times, values)
+        optimal_percent = None
+        conversion_used = None
     
     # 선형 피팅 값 생성 (선형 구간에 대해서만)
     if len(linear_times) >= 2:
@@ -339,7 +458,9 @@ def fit_time_course(times, values, model='linear'):
         'F0': F0,  # 초기 형광값
         'Fmax': Fmax,  # 최대 형광값
         'R_squared': r_squared,  # 선형 피팅의 R²
-        'linear_fraction': len(linear_times) / len(times) if len(times) > 0 else 0
+        'linear_fraction': len(linear_times) / len(times) if len(times) > 0 else 0,
+        'optimal_percent': optimal_percent,  # 사용된 전환율 (%)
+        'conversion_used': conversion_used if use_optimized else None  # 사용된 전환율 (0-1)
     }
     
     return params, fit_values, r_squared

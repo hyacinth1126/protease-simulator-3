@@ -1,5 +1,9 @@
 import pandas as pd
 import streamlit as st
+import plotly.graph_objects as go
+import numpy as np
+import os
+from pathlib import Path
 
 from mode_general_analysis.analysis import (
     UnitStandardizer,
@@ -13,6 +17,7 @@ from mode_general_analysis.analysis import (
     ModelF_EnzymeSurfaceSequestration
 )
 from mode_general_analysis.plot import Visualizer
+from mode_prep_raw_data.prep import michaelis_menten_calibration
 
 
 def verbose_callback(message: str, level: str = "info"):
@@ -306,21 +311,34 @@ def general_analysis_mode(st):
     # MM Results 시트 읽기
     if xlsx_path_for_mm_results is not None:
         try:
+            # 1. MM Results (F0, Fmax, v0)
             df_mm_results = pd.read_excel(xlsx_path_for_mm_results, sheet_name='MM Results', engine='openpyxl')
             
             if df_mm_results is not None and 'F0' in df_mm_results.columns and 'Fmax' in df_mm_results.columns:
                 fitted_params = {}
                 conc_col_name = 'Concentration [ug/mL]' if 'Concentration [ug/mL]' in df_mm_results.columns else 'Concentration'
                 
+                # v0 data extraction lists
+                v0_concs = []
+                v0_vals = []
+                
                 for _, row in df_mm_results.iterrows():
                     conc_value = row[conc_col_name]
-                    if pd.notna(conc_value) and pd.notna(row['F0']) and pd.notna(row['Fmax']):
+                    if pd.notna(conc_value):
                         try:
                             conc_float = float(conc_value)
-                            fitted_params[conc_float] = {
-                                'F0': float(row['F0']),
-                                'Fmax': float(row['Fmax'])
-                            }
+                            # F0, Fmax
+                            if pd.notna(row['F0']) and pd.notna(row['Fmax']):
+                                fitted_params[conc_float] = {
+                                    'F0': float(row['F0']),
+                                    'Fmax': float(row['Fmax'])
+                                }
+                            
+                            # v0
+                            v0_val = row.get('v0') if 'v0' in row else row.get('v0 (RFU/min)')
+                            if pd.notna(v0_val):
+                                v0_concs.append(conc_float)
+                                v0_vals.append(float(v0_val))
                         except (ValueError, TypeError):
                             continue
                 
@@ -330,9 +348,71 @@ def general_analysis_mode(st):
                 else:
                     fitted_params = None
                     st.session_state['fitted_params'] = None
+                
+                # Store v0 data from file
+                if v0_concs and v0_vals:
+                    st.session_state['v0_data_from_file'] = {
+                        'concentrations': v0_concs,
+                        'v0_values': v0_vals
+                    }
             else:
                 fitted_params = None
                 st.session_state['fitted_params'] = None
+
+            # 2. MM Fit Results (Vmax, Km)
+            try:
+                xl = pd.ExcelFile(xlsx_path_for_mm_results)
+                if 'MM Fit Results' in xl.sheet_names:
+                    df_fit = pd.read_excel(xlsx_path_for_mm_results, sheet_name='MM Fit Results', engine='openpyxl')
+                    mm_fit_from_file = {}
+                    
+                    # Determine columns
+                    p_col = '파라미터' if '파라미터' in df_fit.columns else 'Parameter'
+                    v_col = '값' if '값' in df_fit.columns else 'Value'
+                    
+                    if p_col in df_fit.columns and v_col in df_fit.columns:
+                        params = dict(zip(df_fit[p_col], df_fit[v_col]))
+                        
+                        def get_param(keys):
+                            for k in keys:
+                                found = next((p for p in params if k.lower() in str(p).lower()), None)
+                                if found: return params[found]
+                            return None
+                        
+                        vmax = get_param(['Vmax'])
+                        km = get_param(['Km'])
+                        r2 = get_param(['R²', 'R2', 'R_squared'])
+                        slope = get_param(['Slope'])
+                        intercept = get_param(['Intercept'])
+                        
+                        def to_float(x):
+                            try: return float(x)
+                            except: return None
+                            
+                        if vmax is not None and km is not None:
+                            mm_fit_from_file = {
+                                'Vmax': to_float(vmax),
+                                'Km': to_float(km),
+                                'R_squared': to_float(r2),
+                                'fit_success': True,
+                                'experiment_type': "Substrate 농도 변화 (표준 MM)",
+                                'equation': f"v₀ = {to_float(vmax):.2f}[S] / ({to_float(km):.2f} + [S])"
+                            }
+                        elif slope is not None:
+                            mm_fit_from_file = {
+                                'slope': to_float(slope),
+                                'intercept': to_float(intercept) if intercept else 0,
+                                'R_squared': to_float(r2),
+                                'fit_success': True,
+                                'experiment_type': "Enzyme 농도 변화",
+                                'equation': f"v₀ = {to_float(slope):.4f}[E] + {to_float(intercept) if intercept else 0:.4f}"
+                            }
+                    
+                    if mm_fit_from_file:
+                         st.session_state['mm_fit_from_file'] = mm_fit_from_file
+            except Exception:
+                pass
+
         except Exception:
             fitted_params = None
             st.session_state['fitted_params'] = None
@@ -409,9 +489,10 @@ def general_analysis_mode(st):
         st.metric("시간 범위", time_display)
     
     # Tabs for different views
-    tab1, tab2, tab3, tab4 = st.tabs([
+    tab1, tab2, tab_desc, tab3, tab4 = st.tabs([
         "📊 정규화 데이터", 
         "🔬 모델 피팅",
+        "📖 모델 설명",
         "📉 모델 비교",
         "💡 진단 분석"
     ])
@@ -458,18 +539,116 @@ def general_analysis_mode(st):
             fig_norm.update_xaxes(range=[0, original_time_max])
         st.plotly_chart(fig_norm, use_container_width=True)
         
-        # 시간-농도 그래프 추가
-        st.subheader("시간-농도 그래프")
-        fig_heatmap = Visualizer.plot_time_concentration_heatmap(df, conc_unit, time_label,
-                                                                 enzyme_name=enzyme_name,
-                                                                 substrate_name=substrate_name)
-        # 원본 시간 범위로 xaxis 설정
-        original_time_max = st.session_state.get('original_time_max', df['time_s'].max())
-        if time_unit == 'min':
-            fig_heatmap.update_xaxes(range=[0, original_time_max])
+        # v0 vs [S] Michaelis-Menten Fit Graph replacement
+        st.subheader("v₀ vs [S] Michaelis-Menten Fit")
+        
+        # Data preparation
+        v0_data = None
+        mm_fit = None
+        
+        # 1. Try from session state (Memory from Data Load mode)
+        if 'interpolation_results' in st.session_state and st.session_state.get('mm_data_ready', False):
+            results = st.session_state['interpolation_results']
+            if 'v0_vs_concentration' in results and 'mm_fit_results' in results:
+                v0_data = results['v0_vs_concentration']
+                mm_fit = results['mm_fit_results']
+        
+        # 2. Try from session state (Loaded from file in this mode)
+        if (v0_data is None or mm_fit is None) and 'v0_data_from_file' in st.session_state:
+            v0_data = st.session_state['v0_data_from_file']
+            if 'mm_fit_from_file' in st.session_state:
+                mm_fit = st.session_state['mm_fit_from_file']
+
+        # Plotting
+        if v0_data and mm_fit:
+            # Determine exp type
+            exp_type = mm_fit.get('experiment_type', 'Substrate 농도 변화 (표준 MM)')
+            
+            fig_v0 = go.Figure()
+            
+            # Experimental Points
+            fig_v0.add_trace(go.Scatter(
+                x=v0_data['concentrations'],
+                y=v0_data['v0_values'],
+                mode='markers',
+                name='Experimental v₀',
+                marker=dict(size=10, color='red', line=dict(width=2, color='black'))
+            ))
+            
+            # Fit Line
+            if mm_fit.get('fit_success'):
+                conc_min = min(v0_data['concentrations'])
+                conc_max = max(v0_data['concentrations'])
+                conc_range = np.linspace(conc_min * 0.5, conc_max * 1.5, 200)
+                
+                if exp_type == "Substrate 농도 변화 (표준 MM)" and mm_fit.get('Vmax') is not None:
+                     v0_fitted = michaelis_menten_calibration(conc_range, mm_fit['Vmax'], mm_fit['Km'])
+                     line_name = mm_fit.get('equation', 'MM Fit')
+                     
+                     # Stats text
+                     stats_text = f"Vmax = {mm_fit['Vmax']:.2f}<br>"
+                     stats_text += f"Km = {mm_fit['Km']:.4f} μM<br>"
+                     if mm_fit.get('R_squared'):
+                        stats_text += f"R² = {mm_fit['R_squared']:.4f}"
+                     
+                     xaxis_title = '[S] (μM)'
+                     title = 'Initial Velocity (v₀) vs Substrate Concentration [S]'
+                     
+                else: # Linear/Enzyme
+                     slope = mm_fit.get('slope', 0)
+                     intercept = mm_fit.get('intercept', 0)
+                     v0_fitted = slope * conc_range + intercept
+                     line_name = mm_fit.get('equation', 'Linear Fit')
+                     
+                     # Stats text
+                     stats_text = f"Slope = {slope:.4f}<br>"
+                     stats_text += f"Intercept = {intercept:.4f}<br>"
+                     if mm_fit.get('R_squared'):
+                        stats_text += f"R² = {mm_fit['R_squared']:.4f}<br>"
+                     stats_text += "<br><b>⚠️ Km을 구할 수 없음</b>"
+                     
+                     xaxis_title = '[E] (μg/mL)'
+                     title = 'Initial Velocity (v₀) vs Enzyme Concentration [E] (Substrate 고정)'
+
+                fig_v0.add_trace(go.Scatter(
+                    x=conc_range,
+                    y=v0_fitted,
+                    mode='lines',
+                    name=line_name,
+                    line=dict(width=2.5, color='blue')
+                ))
+                
+                fig_v0.add_annotation(
+                    xref="paper", yref="paper",
+                    x=0.05, y=0.95,
+                    xanchor='left', yanchor='top',
+                    text=stats_text,
+                    showarrow=False,
+                    bgcolor="rgba(0,0,0,0)",
+                    bordercolor="rgba(0,0,0,0)",
+                    borderwidth=0,
+                    font=dict(size=11)
+                )
+
+            fig_v0.update_layout(
+                title=title,
+                xaxis_title=xaxis_title,
+                yaxis_title='Initial Velocity v₀ (Fluorescence Units / Time)',
+                template='plotly_white',
+                height=500,
+                hovermode='x unified'
+            )
+            st.plotly_chart(fig_v0, use_container_width=True)
+            
+            # Show simple table
+            with st.expander("📋 실험 데이터 보기"):
+                 st.dataframe(pd.DataFrame({
+                     xaxis_title: v0_data['concentrations'],
+                     'v₀ (RFU/min)': v0_data['v0_values']
+                 }).sort_values(xaxis_title), use_container_width=True, hide_index=True)
+                 
         else:
-            fig_heatmap.update_xaxes(range=[0, original_time_max])
-        st.plotly_chart(fig_heatmap, use_container_width=True)
+            st.info("⚠️ Michaelis-Menten 피팅 데이터가 없습니다. Data Load 모드에서 분석을 수행하거나 결과 파일(MM Fit Results 시트 포함)을 로드해주세요.")
         
         # Summary statistics
         fitted_params_used = st.session_state.get('fitted_params', None)
@@ -645,6 +824,112 @@ def general_analysis_mode(st):
             with result_container:
                 st.success("🎉 모든 모델 피팅 완료! '모델 비교' 탭에서 결과를 확인하세요.")
     
+    with tab_desc:
+        st.subheader("📚 키네틱 모델 상세 설명")
+        st.markdown(r"""
+        이 시뮬레이터는 펩타이드 기질과 효소 반응을 분석하기 위해 6가지 키네틱 모델을 제공합니다.
+        
+        #### 1. 기본 모델 (Basic Models)
+        고전적인 효소 반응 속도론을 기반으로 하며, Fmax가 효소 농도에 독립적인 경우를 가정합니다.
+
+        **📌 모델 A: 기질 고갈 (Substrate Depletion)**
+        - **개요**: 가장 기본적인 1차 반응 모델입니다. 기질([S])이 소모됨에 따라 반응 속도가 감소합니다.
+        - **수식**:
+          $$ \alpha(t) = 1 - e^{-k_{obs} \cdot t} $$
+          $$ k_{obs} = \frac{k_{cat}}{K_M} \cdot [E] $$
+        - **파라미터**:
+          - $k_{cat}/K_M$: 촉매 효율 ($M^{-1}s^{-1}$)
+        - **특징**: 
+          - [E]가 낮을 때 초기 속도 v₀는 [E]에 선형 비례합니다.
+          - 시간이 지나면 모든 기질이 절단되어 정규화된 형광값 α가 1에 도달합니다.
+
+        **📌 모델 B: 효소 비활성화 (Enzyme Deactivation)**
+        - **개요**: 반응 진행 중 효소가 서서히 활성을 잃는 현상을 설명합니다.
+        - **수식**:
+          효소 농도가 지수적으로 감소한다고 가정 ($[E]_t = [E]_0 \cdot e^{-k_d t}$)
+          $$ \alpha(t) = 1 - \exp\left[-\frac{k_{cat}/K_M \cdot [E]_0}{k_d} (1 - e^{-k_d t})\right] $$
+        - **파라미터**:
+          - $k_{cat}/K_M$: 촉매 효율 ($M^{-1}s^{-1}$)
+          - $k_d$: 효소 비활성화 속도 상수 ($s^{-1}$)
+        - **특징**:
+          - 반응 곡선이 예상보다 일찍 평형에 도달하며, 기질이 남아있음에도 반응이 멈출 수 있습니다 ($\alpha_{\infty} < 1$).
+
+        **📌 모델 C: 물질전달 제한 (Mass Transfer Limitation)**
+        - **개요**: 효소가 기질 표면으로 확산되는 속도가 반응 속도보다 느린 경우입니다.
+        - **수식**:
+          표면 효소 농도 $[E]_s$는 벌크 농도 $[E]_b$보다 낮음
+          $$ [E]_s \approx \frac{[E]_b}{1 + Da}, \quad Da = \frac{k_{cat} \Gamma_0}{K_M k_m} $$
+          $$ \alpha(t) = 1 - e^{-k_{obs} \cdot t}, \quad k_{obs} = \frac{k_{cat}}{K_M} [E]_s $$
+        - **파라미터**:
+          - $k_{cat}/K_M$: 촉매 효율
+          - $k_m$: 물질전달 계수 ($m/s$)
+          - $\Gamma_0$: 초기 표면 기질 밀도 ($pmol/cm^2$)
+        - **특징**:
+          - 초기 반응 속도가 확산에 의해 제한되므로, 효소 농도가 높아져도 반응 속도가 비례해서 증가하지 않고 포화됩니다.
+
+        ---
+
+        #### 2. 확장 모델 (Extended Models)
+        Fmax(최대 형광값)가 효소 농도([E])에 따라 달라지는 복잡한 표면 반응을 설명합니다.
+
+        **📌 모델 D: 농도 의존 Fmax (Concentration Dependent Fmax)**
+        - **개요**: 효소 농도가 높을수록 더 많은 기질에 접근할 수 있는 경우(침투 깊이 증가 등)입니다.
+        - **수식**:
+          최대 절단율 $\alpha_{max}$가 효소 농도에 의존
+          $$ \alpha(t) = \alpha_{max}([E]) \cdot (1 - e^{-k_{obs} t}) $$
+          $$ \alpha_{max}([E]) = \alpha_{\infty} \cdot (1 - e^{-k_{access} [E]}) $$
+        - **파라미터**:
+          - $k_{cat}/K_M$: 촉매 효율
+          - $\alpha_{\infty}$: 이론적 최대 절단 비율
+          - $k_{access}$: 접근성 계수 ($M^{-1}$)
+        - **특징**:
+          - 낮은 [E]에서는 표면 기질만 절단되지만, 높은 [E]에서는 내부 기질까지 절단되어 최종 형광값(Fmax)이 증가합니다.
+
+        **📌 모델 E: 생성물 억제 (Product Inhibition)**
+        - **개요**: 반응 생성물이 효소의 활성 부위에 결합하여 반응을 방해하는 경우입니다.
+        - **수식**:
+          경쟁적 억제 모델을 미분방정식으로 풀이
+          $$ \frac{d\alpha}{dt} = \frac{k_{obs}(1-\alpha)}{1 + K_{i,eff}\alpha} $$
+        - **파라미터**:
+          - $k_{cat}/K_M$: 촉매 효율
+          - $K_{i,eff}$: 유효 억제 상수 (무차원, $[S]_0/K_i$)
+        - **특징**:
+          - 반응 초기에 비해 후반부 속도가 급격히 감소합니다.
+
+        **📌 모델 F: 효소 흡착/격리 (Enzyme Surface Sequestration)**
+        - **개요**: 효소가 기질 표면이나 겔 매트릭스에 비가역적으로 흡착되어 반응에 참여하지 못하는 경우입니다.
+        - **수식**:
+          효소가 표면에 흡착되어($k_{ads}$) 고갈됨
+          $$ \alpha(t) \approx \frac{(k_{cat}/K_M)[E]}{k_{ads}(1+K_{ads}[E])} (1 - e^{-k_{ads} t}) $$
+        - **파라미터**:
+          - $k_{cat}/K_M$: 촉매 효율
+          - $k_{ads}$: 흡착 속도 상수 ($s^{-1}$)
+          - $K_{ads}$: 흡착 평형 상수 ($M^{-1}$)
+        - **특징**:
+          - 높은 [E]에서도 예상보다 낮은 반응성을 보일 수 있습니다.
+          
+        ### 📊 모델 적합도 평가 기준 (AIC)
+
+        **Akaike Information Criterion (AIC)**  
+        모델의 적합도(Goodness of fit)와 복잡도(Complexity) 사이의 균형을 평가하는 지표입니다. 값이 작을수록 더 좋은 모델로 간주합니다.
+
+        **계산식**:
+        $$ AIC = 2k - 2\ln(\hat{L}) $$
+        여기서:
+        - $k$: 모델의 파라미터 수
+        - $\hat{L}$: 모델의 최대 우도(Maximum Likelihood)
+
+        본 프로그램에서는 잔차 제곱합(RSS)을 이용하여 다음과 같이 계산합니다:
+        $$ AIC = n \ln\left(\frac{RSS}{n}\right) + 2k + C $$
+        - $n$: 전체 데이터 포인트 수
+        - $RSS$: 잔차 제곱합 ($\sum (y_{obs} - y_{pred})^2$)
+        - $C$: 상수항 (전체 우도 식 포함)
+
+        **해석**:
+        - **ΔAIC < 2**: 두 모델 간 유의미한 차이가 없음
+        - **ΔAIC > 10**: AIC가 낮은 모델이 통계적으로 훨씬 더 적합함
+        """)
+
     with tab3:
         if 'fit_results' in st.session_state:
             results = st.session_state['fit_results']

@@ -972,7 +972,7 @@ def data_load_mode(st):
             exp_type = results.get('mm_fit_results', {}).get('experiment_type', 'Substrate 농도 변화 (표준 MM)')
             
             if exp_type == "Substrate 농도 변화 (표준 MM)":
-                tabs = ["📊 실험결과", "🔄 정규화", "📈 초기속도", "📊 v₀ vs [S] MM Fit", "📋 Data Table"]
+                tabs = ["📊 실험결과", "🔄 정규화", "📊 v₀ vs [S] MM Fit", "📋 Data Table"]
             else:
                 tabs = ["📊 실험결과", "🔄 정규화", "📊 v₀ vs [E] Linear Fit", "📋 Data Table"]
             
@@ -1099,11 +1099,22 @@ def data_load_mode(st):
                         if 'normalization_selected_conc_idx' not in st.session_state:
                             st.session_state['normalization_selected_conc_idx'] = 0
                         
+                        # 실험 타입에 따라 단위 변환 함수
+                        def format_conc_name(i):
+                            conc_name = conc_order[i]
+                            conc_value = norm_results[conc_name]['concentration']
+                            # 실험 타입에 따라 단위 결정
+                            exp_type = results.get('mm_fit_results', {}).get('experiment_type', 'Substrate 농도 변화 (표준 MM)')
+                            if exp_type == "Substrate 농도 변화 (표준 MM)":
+                                return f"{conc_value} μM"
+                            else:  # Enzyme 농도 변화
+                                return f"{conc_value} μg/mL"
+                        
                         conc_idx = st.selectbox(
                             "농도 선택",
                             range(len(conc_order)),
                             index=st.session_state['normalization_selected_conc_idx'],
-                            format_func=lambda i: f"{conc_order[i]} ({norm_results[conc_order[i]]['concentration']})",
+                            format_func=format_conc_name,
                             key="normalization_tab_conc_select"
                         )
                         
@@ -1119,6 +1130,11 @@ def data_load_mode(st):
                         # 데이터 범위 계산
                         t_min = norm_data['times'].min()
                         t_max = norm_data['times'].max()
+                        
+                        # v0 계산 (정규화된 데이터에서 initial linear region의 기울기)
+                        # 정규화된 데이터: F_linear(t) = k_obs * t
+                        # 원본 데이터로 변환: v0 = k_obs * (Fmax - F0)
+                        v0 = norm_data['k_obs'] * (norm_data['Fmax'] - norm_data['F0']) if norm_data['k_obs'] is not None else None
                         
                         # Exponential fit 곡선 (Full kinetics) - 주황색 실선
                         if norm_data['k_obs'] is not None and norm_data['k_obs'] > 0:
@@ -1137,14 +1153,17 @@ def data_load_mode(st):
                             
                             # Initial linear region - 파란색 점선
                             # t=0에서의 접선: F_linear(t) = k_obs * t (정규화된 데이터, F0=0)
-                            initial_slope = norm_data['k_obs']  # dF/dt at t=0 = F_max * k_obs = 1.0 * k_obs
+                            initial_slope = norm_data['k_obs']  # 정규화된 데이터에서의 기울기
                             linear_curve = initial_slope * t_fit
+                            
+                            # v0 정보를 범례에 포함
+                            v0_label = f"Initial linear region (v₀={v0:.2f} RFU/min)" if v0 is not None else "Initial linear region"
                             
                             fig_norm.add_trace(go.Scatter(
                                 x=t_fit,
                                 y=linear_curve,
                                 mode='lines',
-                                name='Initial linear region',
+                                name=v0_label,
                                 line=dict(color='lightblue', width=2.5, dash='dash')
                             ))
                             
@@ -1220,6 +1239,7 @@ def data_load_mode(st):
                             'F_max': [f"{norm_data['Fmax']:.4f}"],
                             'k_obs': [f"{norm_data['k_obs']:.4f}" if norm_data['k_obs'] is not None else "N/A"],
                             'τ (1/k_obs)': [f"{norm_data['tau']:.4f}" if norm_data['tau'] is not None and not np.isinf(norm_data['tau']) else "N/A"],
+                            'v₀ (RFU/min)': [f"{v0:.2f}" if v0 is not None else "N/A"],
                             'R²': [f"{norm_data['R_squared']:.4f}"],
                             '방정식': [norm_data['equation']]
                         }
@@ -1231,12 +1251,15 @@ def data_load_mode(st):
                         summary_data = []
                         for conc_name in conc_order:
                             n_data = norm_results[conc_name]
+                            # v0 계산
+                            v0_conc = n_data['k_obs'] * (n_data['Fmax'] - n_data['F0']) if n_data['k_obs'] is not None else None
                             summary_data.append({
                                 '농도': conc_name,
                                 'F₀': f"{n_data['F0']:.4f}",
                                 'F_max': f"{n_data['Fmax']:.4f}",
                                 'k_obs': f"{n_data['k_obs']:.4f}" if n_data['k_obs'] is not None else "N/A",
                                 'τ': f"{n_data['tau']:.4f}" if n_data['tau'] is not None and not np.isinf(n_data['tau']) else "N/A",
+                                'v₀ (RFU/min)': f"{v0_conc:.2f}" if v0_conc is not None else "N/A",
                                 'R²': f"{n_data['R_squared']:.4f}",
                                 '방정식': n_data['equation'][:50] + "..." if len(n_data['equation']) > 50 else n_data['equation']
                             })
@@ -1246,210 +1269,8 @@ def data_load_mode(st):
                 else:
                     st.info("정규화 결과가 없습니다. 먼저 'Michaelis-Menten Model 실행' 버튼을 클릭해주세요.")
             
-            # Tab 3: 초기속도 (Substrate 조건 실험일 때만)
-            if exp_type == "Substrate 농도 변화 (표준 MM)":
-                with tab_objects[2]:
-                    st.subheader("초기속도")
-                    
-                    # mm_results에서 linear_times와 linear_values 가져오기
-                    mm_results = results.get('mm_results', {})
-                    raw_data = results.get('raw_data', {})
-                    
-                    if mm_results:
-                        fig_v0 = go.Figure()
-                        colors = ['blue', 'red', 'orange', 'green', 'purple', 'brown', 'pink', 'gray', 'olive', 'cyan']
-                        
-                        # 농도 순서대로 정렬
-                        conc_col = None
-                        for col in ['Concentration [μM]', 'Concentration [ug/mL]']:
-                            if col in results['mm_results_df'].columns:
-                                conc_col = col
-                                break
-                        
-                        if conc_col:
-                            conc_order = sorted(mm_results.keys(), key=lambda x: mm_results[x]['concentration'])
-                        else:
-                            conc_order = list(mm_results.keys())
-                        
-                        # 범례에 표시할 농도 이름 변환 함수 (실험 타입에 따라)
-                        def get_legend_name(conc_name, exp_type):
-                            """실험 타입에 따라 농도 이름을 올바른 단위로 변환"""
-                            conc_match = re.search(r'(\d+\.?\d*)', conc_name)
-                            if conc_match:
-                                conc_value = float(conc_match.group(1))
-                                # 실험 타입에 따라 단위 결정
-                                if exp_type == "Substrate 농도 변화 (표준 MM)":
-                                    return f"{conc_value} μM"
-                                else:  # Enzyme 농도 변화
-                                    return f"{conc_value} μg/mL"
-                            return conc_name
-                        
-                        for idx, conc_name in enumerate(conc_order):
-                            color = colors[idx % len(colors)]
-                            params = mm_results[conc_name]
-                            legend_name = get_legend_name(conc_name, exp_type)
-                            
-                            # 원본 데이터 포인트
-                            if conc_name in raw_data:
-                                times_raw = raw_data[conc_name]['time']
-                                values_raw = raw_data[conc_name]['value']
-                                
-                                fig_v0.add_trace(go.Scatter(
-                                    x=times_raw,
-                                    y=values_raw,
-                                    mode='markers',
-                                    name=f'{legend_name} (Data)',
-                                    marker=dict(size=6, color=color, symbol='circle', opacity=0.5),
-                                    legendgroup=conc_name,
-                                    showlegend=True
-                                ))
-                            
-                            # 선형 구간 데이터 포인트
-                            if 'linear_times' in params and 'linear_values' in params:
-                                linear_times = params['linear_times']
-                                linear_values = params['linear_values']
-                                
-                                fig_v0.add_trace(go.Scatter(
-                                    x=linear_times,
-                                    y=linear_values,
-                                    mode='markers',
-                                    name=f'{legend_name} (Linear Region)',
-                                    marker=dict(size=10, color=color, symbol='diamond', line=dict(width=2, color='black')),
-                                    legendgroup=conc_name,
-                                    showlegend=True
-                                ))
-                                
-                                # 선형 피팅 라인 (선형 구간만 표시)
-                                v0 = params['v0']
-                                F0 = params['F0']
-                                if len(linear_times) > 0:
-                                    # 선형 구간의 시작과 끝만 사용
-                                    time_fit = linear_times
-                                    fit_line = F0 + v0 * time_fit
-                                    
-                                    fig_v0.add_trace(go.Scatter(
-                                        x=time_fit,
-                                        y=fit_line,
-                                        mode='lines',
-                                        name=f'{legend_name} (v₀={v0:.2f}, R²={params["R_squared"]:.3f})',
-                                        line=dict(color=color, width=2.5, dash='dash'),
-                                        legendgroup=conc_name,
-                                        showlegend=True
-                                    ))
-                        
-                        fig_v0.update_layout(
-                            xaxis_title='Time (min)',
-                            yaxis_title='RFU',
-                            height=700,
-                            template='plotly_white',
-                            plot_bgcolor='rgba(0,0,0,0)',
-                            paper_bgcolor='rgba(0,0,0,0)',
-                            hovermode='x unified',
-                            legend=dict(
-                                orientation="v",
-                                yanchor="top",
-                                y=1,
-                                xanchor="right",
-                                x=0.99,
-                                bgcolor="rgba(255,255,255,0.8)",
-                                bordercolor="rgba(0,0,0,0.2)",
-                                borderwidth=1
-                            )
-                        )
-                        
-                        st.plotly_chart(fig_v0, use_container_width=True)
-                        
-                        # 초기구간에서의 초기 속도 그래프 (확대)
-                        st.subheader("초기구간 확대 (Initial Velocity 구간)")
-                        fig_v0_zoom = go.Figure()
-                        
-                        for idx, conc_name in enumerate(conc_order):
-                            color = colors[idx % len(colors)]
-                            params = mm_results[conc_name]
-                            legend_name = get_legend_name(conc_name, exp_type)
-                            
-                            # 선형 구간 데이터만 표시
-                            if 'linear_times' in params and 'linear_values' in params:
-                                linear_times = params['linear_times']
-                                linear_values = params['linear_values']
-                                
-                                if len(linear_times) > 0 and len(linear_values) > 0:
-                                    # 선형 구간 데이터 포인트
-                                    fig_v0_zoom.add_trace(go.Scatter(
-                                        x=linear_times,
-                                        y=linear_values,
-                                        mode='markers',
-                                        name=f'{legend_name} (Data)',
-                                        marker=dict(size=12, color=color, symbol='circle', line=dict(width=2, color='black')),
-                                        legendgroup=conc_name,
-                                        showlegend=True
-                                    ))
-                                    
-                                    # 선형 피팅 라인
-                                    v0 = params['v0']
-                                    F0 = params['F0']
-                                    time_fit = linear_times
-                                    fit_line = F0 + v0 * time_fit
-                                    
-                                    fig_v0_zoom.add_trace(go.Scatter(
-                                        x=time_fit,
-                                        y=fit_line,
-                                        mode='lines',
-                                        name=f'{legend_name} (v₀={v0:.2f} RFU/min, R²={params["R_squared"]:.3f})',
-                                        line=dict(color=color, width=3, dash='dash'),
-                                        legendgroup=conc_name,
-                                        showlegend=True
-                                    ))
-                        
-                        fig_v0_zoom.update_layout(
-                            xaxis_title='Time (min)',
-                            yaxis_title='RFU',
-                            title='초기구간 확대: 전환율 ≤ 10% 구간에서의 초기 속도',
-                            height=600,
-                            template='plotly_white',
-                            plot_bgcolor='rgba(0,0,0,0)',
-                            paper_bgcolor='rgba(0,0,0,0)',
-                            hovermode='x unified',
-                            legend=dict(
-                                orientation="v",
-                                yanchor="top",
-                                y=1,
-                                xanchor="right",
-                                x=0.99,
-                                bgcolor="rgba(255,255,255,0.8)",
-                                bordercolor="rgba(0,0,0,0.2)",
-                                borderwidth=1
-                            )
-                        )
-                        
-                        st.plotly_chart(fig_v0_zoom, use_container_width=True)
-                        
-                        # 초기속도 요약 테이블
-                        st.subheader("초기속도 요약")
-                        v0_summary_data = []
-                        for conc_name in conc_order:
-                            params = mm_results[conc_name]
-                            optimal_percent_str = f"{params.get('optimal_percent', 0):.1f}%" if params.get('optimal_percent') is not None else "N/A"
-                            v0_summary_data.append({
-                                '농도': conc_name,
-                                'v₀ (RFU/min)': f"{params['v0']:.2f}",
-                                'F₀': f"{params['F0']:.2f}",
-                                'R²': f"{params['R_squared']:.4f}",
-                                '최적 퍼센트': optimal_percent_str,
-                                '선형 구간 비율': f"{params['linear_fraction']:.2%}"
-                            })
-                        v0_summary_df = pd.DataFrame(v0_summary_data)
-                        st.dataframe(v0_summary_df, use_container_width=True, hide_index=True)
-                        
-                        st.info("""
-                        💡 **초기 반응 속도 계산 방법**: 
-                        - 기질 전환율(conversion) ≤ 10% 구간만 사용
-                        - F(t)/F∞ ≤ 0.1 인 구간까지의 데이터로 linear regression 수행
-                        - 이는 MM 이론의 정석 기준으로, substrate가 거의 줄지 않고 product/inhibitor 영향이 없는 초기 구간의 속도를 측정합니다.
-                        """)
-            
-            # Tab 4 또는 3: v₀ vs 농도 그래프 (실험 조건에 따라 다름)
-            v0_tab_idx = 3 if exp_type == "Substrate 농도 변화 (표준 MM)" else 2
+            # Tab 2: v₀ vs 농도 그래프 (실험 조건에 따라 다름)
+            v0_tab_idx = 2 if exp_type == "Substrate 농도 변화 (표준 MM)" else 2
             with tab_objects[v0_tab_idx]:
                 if 'v0_vs_concentration' in results and 'mm_fit_results' in results:
                     v0_data = results['v0_vs_concentration']
@@ -1563,7 +1384,7 @@ def data_load_mode(st):
                     st.warning("v₀ vs 농도 데이터가 없습니다.")
             
             # 마지막 탭: 데이터 테이블
-            data_tab_idx = 4 if exp_type == "Substrate 농도 변화 (표준 MM)" else 3
+            data_tab_idx = 3 if exp_type == "Substrate 농도 변화 (표준 MM)" else 3
             with tab_objects[data_tab_idx]:
                 st.subheader("상세 파라미터")
                 

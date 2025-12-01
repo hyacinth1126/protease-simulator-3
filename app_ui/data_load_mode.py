@@ -648,7 +648,7 @@ def data_load_mode(st):
                 
                 progress_bar.progress(0.6)
                 
-                # 3. Interpolation 수행
+                # 3. Interpolation 수행 (정규화 결과 사용)
                 status_text.text("3️⃣ 보간 곡선 생성 중...")
                 
                 all_interp_data = []
@@ -660,12 +660,17 @@ def data_load_mode(st):
                 else:  # Enzyme 농도 변화
                     conc_unit_col = 'Concentration [ug/mL]'
                 
+                # 정규화 결과가 있는지 확인 (나중에 생성되므로 임시로 mm_results 사용)
+                # 정규화 결과는 나중에 생성되므로, 여기서는 mm_results를 사용하되
+                # 정규화 결과가 있으면 그것을 사용하도록 수정 필요
+                # 일단 mm_results를 사용하되, 정규화 결과가 생성된 후에는 그것을 사용
+                
                 for conc_name, params in mm_results.items():
                     v0 = params['v0']
                     F0 = params['F0']
                     Fmax = params['Fmax']
                     
-                    # 선형 피팅으로 보간 (v0 = 기울기)
+                    # 선형 피팅으로 보간 (v0 = 기울기) - 임시로 사용
                     # F(t) = F0 + v0 * t
                     y_interp = F0 + v0 * x_interp
                     # Fmax를 넘지 않도록 제한
@@ -1028,6 +1033,46 @@ def data_load_mode(st):
                             mm_fit_success = False
                     else:
                         mm_fit_success = False
+                
+                # 정규화 결과를 사용하여 보간 곡선 재생성 (Exponential 식 사용)
+                status_text.text("8️⃣ 정규화 기반 보간 곡선 재생성 중...")
+                
+                if 'normalization_results' in locals() and normalization_results:
+                    all_interp_data_new = []
+                    
+                    for conc_name in sorted(normalization_results.keys(), 
+                                           key=lambda x: normalization_results[x]['concentration']):
+                        n_data = normalization_results[conc_name]
+                        F0 = n_data['F0']
+                        Fmax = n_data['Fmax']
+                        k_obs = n_data.get('k_obs', None)
+                        
+                        if k_obs is not None and k_obs > 0:
+                            # Exponential 식 사용: F(t) = F0 + (Fmax - F0) * [1 - exp(-k_obs * t)]
+                            # normalize_iterative에서 times는 원본 시간 단위(보통 분)를 사용하므로
+                            # k_obs는 분^-1 단위입니다. x_interp도 분 단위이므로 그대로 사용
+                            y_interp = F0 + (Fmax - F0) * (1 - np.exp(-k_obs * x_interp))
+                            # Fmax를 넘지 않도록 제한
+                            y_interp = np.clip(y_interp, F0, Fmax)
+                        else:
+                            # k_obs가 없으면 선형 보간 사용 (fallback)
+                            v0 = n_data.get('v0', 0)
+                            y_interp = F0 + v0 * x_interp
+                            y_interp = np.clip(y_interp, F0, Fmax)
+                        
+                        conc_value = n_data['concentration']
+                        
+                        for x, y in zip(x_interp, y_interp):
+                            interp_row = {
+                                'Concentration': conc_name,
+                                'Time_min': x,
+                                'RFU_Interpolated': y
+                            }
+                            interp_row[conc_unit_col] = conc_value
+                            all_interp_data_new.append(interp_row)
+                    
+                    # 새로운 보간 데이터로 업데이트
+                    interp_df = pd.DataFrame(all_interp_data_new)
                 
                 progress_bar.progress(1.0)
                 status_text.text("✅ Michaelis-Menten 모델 피팅 및 정규화 완료!")
@@ -1725,6 +1770,18 @@ def data_load_mode(st):
                             else:  # Enzyme 농도 변화
                                 conc_display = f"{conc_value} μg/mL"
                             
+                            # α (절단비율) 계산: normalized_values = (F - F0) / (Fmax - F0)
+                            normalized_values = n_data.get('normalized_values', [])
+                            if len(normalized_values) > 0:
+                                alpha_min = np.min(normalized_values)
+                                alpha_max = np.max(normalized_values)
+                                alpha_mean = np.mean(normalized_values)
+                                alpha_range_str = f"{alpha_min:.3f}-{alpha_max:.3f}"
+                                alpha_mean_str = f"{alpha_mean:.3f}"
+                            else:
+                                alpha_range_str = "N/A"
+                                alpha_mean_str = "N/A"
+                            
                             summary_data.append({
                                 '농도': conc_display,
                                 'F₀': f"{n_data['F0']:.4f}",
@@ -1732,6 +1789,8 @@ def data_load_mode(st):
                                 'k_obs': f"{n_data['k_obs']:.4f}" if n_data['k_obs'] is not None else "N/A",
                                 'τ': f"{n_data['tau']:.4f}" if n_data['tau'] is not None and not np.isinf(n_data['tau']) else "N/A",
                                 'v₀ (RFU/min)': f"{v0_conc:.2f}" if v0_conc is not None else "N/A",
+                                'α 범위': alpha_range_str,
+                                'α 평균': alpha_mean_str,
                                 'R²': f"{n_data['R_squared']:.4f}",
                                 '방정식': n_data['equation'][:50] + "..." if len(n_data['equation']) > 50 else n_data['equation']
                             })

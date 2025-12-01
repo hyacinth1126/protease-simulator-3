@@ -489,8 +489,9 @@ def general_analysis_mode(st):
         st.metric("시간 범위", time_display)
     
     # Tabs for different views
-    tab1, tab2, tab_desc, tab3, tab4 = st.tabs([
-        "📊 정규화 데이터", 
+    tab1, tab_alpha, tab2, tab_desc, tab3, tab4 = st.tabs([
+        "📊 v₀ vs [S] Fit", 
+        "📈 알파 계산",
         "🔬 모델 피팅",
         "📖 모델 설명",
         "📉 모델 비교",
@@ -498,53 +499,13 @@ def general_analysis_mode(st):
     ])
     
     with tab1:
-        # Controls and method description for normalization
-        st.subheader("정규화 설정 및 방법")
-        
-        # Check if fitted parameters are being used
-        fitted_params_used = st.session_state.get('fitted_params', None)
-        using_fitted_params = fitted_params_used is not None and len(fitted_params_used) > 0
-        if using_fitted_params:
-            st.success(f"✅ F0, Fmax 파라미터 로드 완료 ({len(fitted_params_used)}개 농도 조건)")
-            st.info("💡 F0, Fmax 값은 MM Results 시트에서 가져온 값입니다.")
-        else:
-            st.info("ℹ️ 기본 정규화 방식 사용 중 (원본 데이터에서 F0, Fmax 계산)")
-        
-        with st.expander("정규화 방법 보기", expanded=False):
-            if using_fitted_params:
-                st.markdown("""
-                **MM Results 시트에서 F0, Fmax 사용:**
-                - F0, Fmax: Data Load 모드에서 생성된 MM Results 시트에서 직접 읽어옴
-                - 곡선: F(t) = F₀ + (Fmax - F₀)·[1 - exp(-k·t)]
-                - α(t) = (F(t) − F₀) / (Fmax − F₀)
-                - Data Load 모드에서 이미 계산된 파라미터를 그대로 사용
-                """)
-            else:
-                st.markdown("""
-                **기본 정규화 방식:**
-                - 각 농도별 지수 피팅: F(t) = F₀ + A·(1−e⁻ᵏᵗ)
-                - 점근선 Fmax = F₀ + A 사용
-                - α(t) = (F(t) − F₀) / (Fmax − F₀)
-                """)
-
-        fig_norm = Visualizer.plot_normalized_data(df, conc_unit, time_label, 
-                                                   use_lines=True,
-                                                   enzyme_name=enzyme_name,
-                                                   substrate_name=substrate_name)
-        # 원본 시간 범위로 xaxis 설정
-        original_time_max = st.session_state.get('original_time_max', df['time_s'].max())
-        if time_unit == 'min':
-            fig_norm.update_xaxes(range=[0, original_time_max])
-        else:
-            fig_norm.update_xaxes(range=[0, original_time_max])
-        st.plotly_chart(fig_norm, use_container_width=True)
-        
-        # v0 vs [S] Michaelis-Menten Fit Graph replacement
+        # v0 vs [S] Michaelis-Menten Fit Graph
         st.subheader("v₀ vs [S] Michaelis-Menten Fit")
         
         # Data preparation
         v0_data = None
         mm_fit = None
+        norm_results_data = None
         
         # 1. Try from session state (Memory from Data Load mode)
         if 'interpolation_results' in st.session_state and st.session_state.get('mm_data_ready', False):
@@ -552,12 +513,107 @@ def general_analysis_mode(st):
             if 'v0_vs_concentration' in results and 'mm_fit_results' in results:
                 v0_data = results['v0_vs_concentration']
                 mm_fit = results['mm_fit_results']
+            
+            # 정규화 결과 데이터 가져오기 (농도 값으로 변환)
+            if 'normalization_results' in results:
+                norm_results_raw = results['normalization_results']
+                norm_results_data = {}
+                for conc_name, data in norm_results_raw.items():
+                    if 'concentration' in data:
+                        conc_val = float(data['concentration'])
+                        norm_results_data[conc_val] = {
+                            'concentration': conc_val,
+                            'F0': data.get('F0', None),
+                            'Fmax': data.get('Fmax', None),
+                            'k_obs': data.get('k_obs', None),
+                            'tau': data.get('tau', None),
+                            'R_squared': data.get('R_squared', None),
+                            'equation': data.get('equation', None)
+                        }
         
         # 2. Try from session state (Loaded from file in this mode)
         if (v0_data is None or mm_fit is None) and 'v0_data_from_file' in st.session_state:
             v0_data = st.session_state['v0_data_from_file']
             if 'mm_fit_from_file' in st.session_state:
                 mm_fit = st.session_state['mm_fit_from_file']
+        
+        # 3. 파일에서 정규화 결과 읽기 (Normalization Results 시트 또는 MM Results 시트)
+        if norm_results_data is None:
+            xlsx_path_for_norm = None
+            if uploaded_file is not None:
+                import tempfile
+                file_extension = uploaded_file.name.split('.')[-1].lower()
+                if file_extension == 'xlsx':
+                    with tempfile.NamedTemporaryFile(delete=False, suffix='.xlsx', mode='wb') as tmp_file:
+                        tmp_file.write(uploaded_file.getbuffer())
+                        xlsx_path_for_norm = tmp_file.name
+            else:
+                xlsx_paths = [
+                    'Michaelis-Menten_calibration_results.xlsx',
+                    str(Path(__file__).parent.parent / 'Michaelis-Menten_calibration_results.xlsx'),
+                ]
+                for path in xlsx_paths:
+                    if os.path.exists(path):
+                        xlsx_path_for_norm = path
+                        break
+            
+            if xlsx_path_for_norm is not None:
+                try:
+                    # Normalization Results 시트 시도
+                    xl = pd.ExcelFile(xlsx_path_for_norm)
+                    if 'Normalization Results' in xl.sheet_names:
+                        df_norm = pd.read_excel(xlsx_path_for_norm, sheet_name='Normalization Results', engine='openpyxl')
+                        norm_results_data = {}
+                        for _, row in df_norm.iterrows():
+                            # 농도 추출 (농도 컬럼 찾기)
+                            conc_col = None
+                            for col in df_norm.columns:
+                                if '농도' in col or 'Concentration' in col:
+                                    conc_col = col
+                                    break
+                            
+                            if conc_col and pd.notna(row.get(conc_col)):
+                                try:
+                                    conc_val = float(str(row[conc_col]).replace('μM', '').replace('μg/mL', '').strip())
+                                    norm_results_data[conc_val] = {
+                                        'concentration': conc_val,
+                                        'F0': row.get('F₀', row.get('F0', None)),
+                                        'Fmax': row.get('F_max', row.get('Fmax', None)),
+                                        'k_obs': row.get('k_obs', None),
+                                        'tau': row.get('τ', row.get('tau', None)),
+                                        'R_squared': row.get('R²', row.get('R_squared', None)),
+                                        'equation': row.get('방정식', row.get('equation', None))
+                                    }
+                                except (ValueError, TypeError):
+                                    continue
+                    # Normalization Results 시트가 없으면 MM Results 시트에서 가져오기
+                    elif 'MM Results' in xl.sheet_names:
+                        df_mm = pd.read_excel(xlsx_path_for_norm, sheet_name='MM Results', engine='openpyxl')
+                        norm_results_data = {}
+                        conc_col_name = 'Concentration [ug/mL]' if 'Concentration [ug/mL]' in df_mm.columns else 'Concentration'
+                        for _, row in df_mm.iterrows():
+                            if pd.notna(row.get(conc_col_name)):
+                                try:
+                                    conc_val = float(row[conc_col_name])
+                                    norm_results_data[conc_val] = {
+                                        'concentration': conc_val,
+                                        'F0': row.get('F0', None),
+                                        'Fmax': row.get('Fmax', None),
+                                        'k_obs': row.get('k_obs', None),
+                                        'tau': row.get('tau', row.get('τ', None)),
+                                        'R_squared': row.get('R²', row.get('R_squared', None)),
+                                        'equation': row.get('방정식', row.get('equation', None))
+                                    }
+                                except (ValueError, TypeError):
+                                    continue
+                except Exception:
+                    pass
+                finally:
+                    if uploaded_file is not None and xlsx_path_for_norm and os.path.exists(xlsx_path_for_norm):
+                        try:
+                            os.unlink(xlsx_path_for_norm)
+                        except:
+                            pass
 
         # Plotting
         if v0_data and mm_fit:
@@ -640,49 +696,201 @@ def general_analysis_mode(st):
             )
             st.plotly_chart(fig_v0, use_container_width=True)
             
-            # Show simple table
-            with st.expander("📋 실험 데이터 보기"):
-                 st.dataframe(pd.DataFrame({
-                     xaxis_title: v0_data['concentrations'],
-                     'v₀ (RFU/min)': v0_data['v0_values']
-                 }).sort_values(xaxis_title), use_container_width=True, hide_index=True)
+            # Show table with additional columns
+            st.subheader("📋 실험 데이터")
+            
+            # 테이블 데이터 준비
+            table_data = {
+                xaxis_title: v0_data['concentrations'],
+                'v₀ (RFU/min)': v0_data['v0_values']
+            }
+            
+            # 정규화 결과 데이터 추가
+            if norm_results_data:
+                fmax_list = []
+                r2_list = []
+                k_obs_list = []
+                tau_list = []
+                equation_list = []
+                
+                for conc in v0_data['concentrations']:
+                    # 농도 매칭 (부동소수점 오차 고려)
+                    matched_data = None
+                    for norm_conc, norm_data in norm_results_data.items():
+                        if abs(float(conc) - float(norm_conc)) < 0.001:
+                            matched_data = norm_data
+                            break
+                    
+                    if matched_data:
+                        fmax_list.append(matched_data.get('Fmax', None))
+                        r2_list.append(matched_data.get('R_squared', None))
+                        k_obs_list.append(matched_data.get('k_obs', None))
+                        tau_list.append(matched_data.get('tau', None))
+                        equation_list.append(matched_data.get('equation', None))
+                    else:
+                        fmax_list.append(None)
+                        r2_list.append(None)
+                        k_obs_list.append(None)
+                        tau_list.append(None)
+                        equation_list.append(None)
+                
+                table_data['Fmax'] = fmax_list
+                table_data['R²'] = r2_list
+                table_data['k_obs'] = k_obs_list
+                table_data['τ'] = tau_list
+                table_data['방정식'] = equation_list
+            
+            df_table = pd.DataFrame(table_data).sort_values(xaxis_title)
+            st.dataframe(df_table, use_container_width=True, hide_index=True)
                  
         else:
             st.info("⚠️ Michaelis-Menten 피팅 데이터가 없습니다. Data Load 모드에서 분석을 수행하거나 결과 파일(MM Fit Results 시트 포함)을 로드해주세요.")
+    
+    with tab_alpha:
+        st.subheader("📈 알파(α) 계산")
         
-        # Summary statistics
-        fitted_params_used = st.session_state.get('fitted_params', None)
-        if fitted_params_used is not None and len(fitted_params_used) > 0:
-            st.subheader("정규화 요약 (MM Results 시트 사용)")
+        st.markdown("""
+        **알파(α)란?**  
+        정규화된 절단 비율로, 0 (절단 없음)에서 1 (완전 절단) 사이의 값을 가집니다.
+        
+        **계산식**: α(t) = (F(t) - F₀) / (Fmax - F₀)
+        - **F(t)**: 시간 t에서의 형광값
+          - Data Load 모드 결과 사용 시: 정규화를 통해 얻은 exponential 곡선의 interpolated 값 (RFU_Interpolated)
+          - 직접 계산 시: 원본 데이터의 형광값
+        - **F₀**: 초기 형광값
+          - Data Load 모드에서 계산된 값이 있으면: 정규화 exponential 곡선의 interpolated 값들에서 얻은 F0 값 (MM Results 시트)
+          - 없으면: 각 농도별 최소 형광값 (min(F))
+        - **Fmax**: 최대 형광값
+          - Data Load 모드에서 계산된 값이 있으면: 정규화 exponential 곡선의 interpolated 값들에서 얻은 Fmax 값 (MM Results 시트)
+          - 없으면: Region-based 정규화 방식 사용
+            1. Plateau 구간이 존재하면: Plateau 구간의 평균 형광값 (mean(F_plateau))
+            2. 지수 증가 구간이 충분하면 (≥3점): 지수 함수 피팅으로 F∞ 계산 (F(t) = F₀ + A·(1 - e^(-k·t))에서 Fmax = F₀ + A)
+            3. 그 외: 최대 형광값 (max(F))
+        """)
+        
+        # Check if alpha column exists
+        if 'alpha' not in df.columns:
+            st.error("❌ Alpha 값이 계산되지 않았습니다. 데이터 정규화가 필요합니다.")
+            st.info("💡 데이터가 정규화되지 않았습니다. 데이터 로드 및 정규화 과정을 확인해주세요.")
         else:
-            st.subheader("정규화 요약 (지수 피팅 기반)")
-        
-        summary_data = []
-        for conc in sorted(df[conc_col].unique()):
-            subset = df[df[conc_col] == conc]
-            # Check if optional columns exist
-            fmax_std = f"{subset['Fmax_std'].iloc[0]:.1f}" if 'Fmax_std' in subset.columns else "N/A"
-            fit_k = f"{subset['fit_k'].iloc[0]:.4f}" if 'fit_k' in subset.columns else "N/A"
-            fmax_method = subset['Fmax_method'].iloc[0] if 'Fmax_method' in subset.columns else "N/A"
+            # Alpha vs Time Plot
+            st.subheader("📊 정규화 데이터: α(t) vs 시간")
             
-            summary_data.append({
-                f'농도 ({conc_unit})': conc,
-                'F0 (초기)': f"{subset['F0'].iloc[0]:.1f}",
-                'Fmax (점근선)': f"{subset['Fmax'].iloc[0]:.1f}",
-                'Fmax 방법': fmax_method,
-                'Fmax 표준편차': fmax_std,
-                '피팅 k (s⁻¹)': fit_k,
-                'α 범위': f"{subset['alpha'].min():.3f} - {subset['alpha'].max():.3f}",
-                'α 평균': f"{subset['alpha'].mean():.3f}"
-            })
-        
-        summary_df = pd.DataFrame(summary_data)
-        st.dataframe(summary_df, use_container_width=True)
-        
-        if fitted_params_used is not None and len(fitted_params_used) > 0:
-            st.info("📊 F0, Fmax 값은 MM Results 시트에서 가져온 값입니다.")
-        else:
-            st.info("📊 각 농도별로 F(t) = F0 + A·(1-exp(-k·t)) 형태의 지수 함수를 피팅하여 점근선 Fmax를 결정합니다.")
+            fig_alpha = Visualizer.plot_normalized_data(df, conc_unit, time_label, 
+                                                       use_lines=True,
+                                                       enzyme_name=enzyme_name,
+                                                       substrate_name=substrate_name)
+            # 원본 시간 범위로 xaxis 설정
+            original_time_max = st.session_state.get('original_time_max', df['time_s'].max())
+            if time_unit == 'min':
+                fig_alpha.update_xaxes(range=[0, original_time_max])
+            else:
+                fig_alpha.update_xaxes(range=[0, original_time_max])
+            st.plotly_chart(fig_alpha, use_container_width=True)
+            
+            # Alpha Statistics
+            st.subheader("📋 농도별 Alpha 통계")
+            
+            conc_col = 'enzyme_ugml' if 'enzyme_ugml' in df.columns else df['conc_col_name'].iloc[0] if 'conc_col_name' in df.columns else None
+            
+            if conc_col:
+                alpha_stats = []
+                for conc in sorted(df[conc_col].unique()):
+                    subset = df[df[conc_col] == conc]
+                    alpha_stats.append({
+                        f'농도 ({conc_unit})': conc,
+                        'Alpha 최소값': f"{subset['alpha'].min():.4f}",
+                        'Alpha 최대값': f"{subset['alpha'].max():.4f}",
+                        'Alpha 평균': f"{subset['alpha'].mean():.4f}",
+                        'Alpha 표준편차': f"{subset['alpha'].std():.4f}",
+                        '데이터 포인트 수': len(subset)
+                    })
+                
+                st.dataframe(pd.DataFrame(alpha_stats), use_container_width=True, hide_index=True)
+            
+            # F0, Fmax 정보
+            st.subheader("🔬 정규화 파라미터 (F₀, Fmax)")
+            
+            # Check if fitted parameters are being used
+            fitted_params_used = st.session_state.get('fitted_params', None)
+            using_fitted_params = fitted_params_used is not None and len(fitted_params_used) > 0
+            
+            if using_fitted_params:
+                st.success(f"✅ F0, Fmax 파라미터 로드 완료 ({len(fitted_params_used)}개 농도 조건)")
+                st.info("💡 F0, Fmax 값은 Data Load 모드의 정규화를 통해 얻은 exponential 곡선의 interpolated 값들에서 계산된 값입니다 (MM Results 시트).")
+            else:
+                st.info("ℹ️ 기본 정규화 방식 사용 중 (interpolated 값에서 F0, Fmax 계산)")
+            
+            # F0, Fmax 테이블
+            if conc_col and 'F0' in df.columns and 'Fmax' in df.columns:
+                f0_fmax_data = []
+                for conc in sorted(df[conc_col].unique()):
+                    subset = df[df[conc_col] == conc]
+                    fmax_method = subset['Fmax_method'].iloc[0] if 'Fmax_method' in subset.columns else "N/A"
+                    
+                    f0_fmax_data.append({
+                        f'농도 ({conc_unit})': conc,
+                        'F₀ (초기)': f"{subset['F0'].iloc[0]:.2f}",
+                        'Fmax (최대)': f"{subset['Fmax'].iloc[0]:.2f}",
+                        'Fmax 방법': fmax_method,
+                        'Alpha 범위': f"{subset['alpha'].min():.3f} - {subset['alpha'].max():.3f}"
+                    })
+                
+                st.dataframe(pd.DataFrame(f0_fmax_data), use_container_width=True, hide_index=True)
+            
+            # 정규화 방법 설명
+            with st.expander("📖 정규화 방법 상세 설명", expanded=False):
+                if using_fitted_params:
+                    st.markdown("""
+                    **MM Results 시트에서 F0, Fmax 사용:**
+                    - F0, Fmax: Data Load 모드에서 생성된 MM Results 시트에서 직접 읽어옴
+                    - 곡선: F(t) = F₀ + (Fmax - F₀)·[1 - exp(-k·t)]
+                    - α(t) = (F(t) − F₀) / (Fmax − F₀)
+                    - Data Load 모드에서 이미 계산된 파라미터를 그대로 사용
+                    """)
+                else:
+                    st.markdown("""
+                    **기본 정규화 방식 (Region-based):**
+                    
+                    1. **임시 정규화 (Temporary Normalization)**
+                       - F0_temp = 최소 형광값 (min(F))
+                       - Fmax_temp = 최대 형광값 (max(F))
+                       - α_temp = (F - F0_temp) / (Fmax_temp - F0_temp)
+                    
+                    2. **구간 구분 (Region Division)**
+                       - 초기 선형 구간 (Initial Linear Region)
+                       - 지수 증가 구간 (Exponential Growth Region)
+                       - Plateau 구간 (Plateau Region)
+                    
+                    3. **최종 정규화 (Final Normalization)**
+                       - F0 = F0_temp (최소값 유지)
+                       - Fmax 결정 방법:
+                         * Plateau 구간이 있으면 → Plateau 평균값
+                         * 지수 증가 구간이 충분하면 → 지수 피팅으로 F∞ 계산
+                         * 그 외 → 최대값 사용
+                       - α = (F - F0) / (Fmax - F0)
+                    
+                    **Fmax 방법 설명:**
+                    - `plateau_avg`: Plateau 구간의 평균값 사용
+                    - `exponential_fit`: 지수 함수 피팅으로 계산된 F∞ 사용
+                    - `fallback_max`: 최대값 사용 (fallback)
+                    """)
+            
+            # Alpha 데이터 다운로드
+            st.subheader("💾 Alpha 데이터 다운로드")
+            
+            # Alpha 데이터 준비
+            alpha_download_df = df[['time_s', conc_col, 'alpha', 'F0', 'Fmax']].copy() if conc_col else df[['time_s', 'alpha', 'F0', 'Fmax']].copy()
+            alpha_download_df = alpha_download_df.sort_values(['time_s', conc_col] if conc_col else 'time_s')
+            
+            csv_alpha = alpha_download_df.to_csv(index=False)
+            st.download_button(
+                label="📥 Alpha 데이터 다운로드 (CSV)",
+                data=csv_alpha,
+                file_name="alpha_calculation_results.csv",
+                mime="text/csv",
+                help="시간, 농도, alpha, F0, Fmax 값을 포함한 CSV 파일"
+            )
     
     with tab2:
         st.subheader("🔬 글로벌 모델 피팅")
@@ -717,6 +925,37 @@ def general_analysis_mode(st):
             st.caption("✓ 표면 흡착 & 비가역 결합")
         
         if st.button("🚀 글로벌 피팅 실행", type="primary"):
+            # 데이터 상태 확인 및 검증
+            with st.expander("🔍 데이터 상태 확인", expanded=False):
+                st.write("**필수 컬럼 확인:**")
+                required_cols = ['alpha', 'time_s', 'FL_intensity']
+                missing_cols = [col for col in required_cols if col not in df.columns]
+                if missing_cols:
+                    st.error(f"❌ 누락된 컬럼: {missing_cols}")
+                    st.stop()
+                else:
+                    st.success(f"✅ 필수 컬럼 존재: {required_cols}")
+                
+                st.write("**데이터 통계:**")
+                st.write(f"- 전체 데이터 포인트: {len(df)}")
+                st.write(f"- Alpha 범위: {df['alpha'].min():.4f} ~ {df['alpha'].max():.4f}")
+                st.write(f"- Alpha 평균: {df['alpha'].mean():.4f}")
+                st.write(f"- Alpha 표준편차: {df['alpha'].std():.4f}")
+                st.write(f"- 시간 범위: {df['time_s'].min():.2f} ~ {df['time_s'].max():.2f} 초")
+                
+                # 농도별 alpha 분포 확인
+                conc_col = 'enzyme_ugml' if 'enzyme_ugml' in df.columns else df['conc_col_name'].iloc[0] if 'conc_col_name' in df.columns else None
+                if conc_col:
+                    st.write(f"**농도별 Alpha 통계:**")
+                    conc_stats = df.groupby(conc_col)['alpha'].agg(['count', 'min', 'max', 'mean', 'std'])
+                    st.dataframe(conc_stats, use_container_width=True)
+                
+                # 문제가 있는 데이터 확인
+                if df['alpha'].max() < 0.1:
+                    st.warning("⚠️ Alpha 값이 모두 0.1 미만입니다. 정규화가 제대로 되지 않았을 수 있습니다.")
+                if df['alpha'].std() < 0.01:
+                    st.warning("⚠️ Alpha 값의 변동성이 매우 작습니다. 데이터가 제대로 정규화되지 않았을 수 있습니다.")
+            
             results = []
             
             # Create a status container

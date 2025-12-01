@@ -163,6 +163,63 @@ class Visualizer:
         return fig
     
     @staticmethod
+    def plot_time_concentration_heatmap(df: pd.DataFrame, conc_unit: str = 'μg/mL', time_label: str = '시간 (초)',
+                                       enzyme_name: str = 'enzyme', substrate_name: str = 'substrate'):
+        """Plot time-concentration heatmap for normalized data
+        
+        Args:
+            df: DataFrame with time_s, alpha columns
+            conc_unit: Concentration unit for labels
+            time_label: Time axis label
+            enzyme_name: Custom name for enzyme (default: 'enzyme')
+            substrate_name: Custom name for substrate (default: 'substrate')
+        """
+        conc_col = Visualizer._detect_conc_col(df)
+        base = conc_col.split('_')[0].lower()
+        entity_name = substrate_name if base.startswith('pep') or base.startswith('sub') else enzyme_name
+        
+        # Get unique time points and concentrations
+        times = sorted(df['time_s'].unique())
+        concentrations = sorted(df[conc_col].unique())
+        
+        # Create a matrix for heatmap: rows = concentrations, cols = times
+        heatmap_data = []
+        for conc in concentrations:
+            row = []
+            subset = df[df[conc_col] == conc]
+            for time in times:
+                time_subset = subset[subset['time_s'] == time]
+                if len(time_subset) > 0:
+                    # Use mean alpha if multiple values exist for same time
+                    alpha_val = time_subset['alpha'].mean()
+                else:
+                    # Interpolate if missing
+                    alpha_val = np.nan
+                row.append(alpha_val)
+            heatmap_data.append(row)
+        
+        # Create heatmap
+        fig = go.Figure(data=go.Heatmap(
+            z=heatmap_data,
+            x=times,
+            y=[f'{entity_name} {c} {conc_unit}' for c in concentrations],
+            colorscale='Viridis',
+            colorbar=dict(title='절단 비율 α'),
+            hovertemplate='시간: %{x:.2f}<br>농도: %{y}<br>α: %{z:.3f}<extra></extra>'
+        ))
+        
+        fig.update_layout(
+            title='정규화 데이터: 시간-농도 그래프',
+            xaxis_title=time_label,
+            yaxis_title=f'농도 ({conc_unit})',
+            template='plotly_white',
+            height=400 + len(concentrations) * 30,  # Dynamic height based on number of concentrations
+            yaxis=dict(autorange='reversed')  # Reverse y-axis so highest concentration is at top
+        )
+        
+        return fig
+    
+    @staticmethod
     def plot_model_fits(df: pd.DataFrame, results: List[ModelResults], 
                        conc_unit: str = 'μg/mL', time_label: str = '시간 (초)',
                        enzyme_name: str = 'enzyme', substrate_name: str = 'substrate'):

@@ -234,15 +234,17 @@ class DataNormalizer:
         # Fluorescence column
         self.fluor_col = 'FL_intensity' if 'FL_intensity' in df.columns else 'RFU' if 'RFU' in df.columns else 'fluor'
     
-    def normalize_temporary(self, df: pd.DataFrame) -> pd.DataFrame:
+    def normalize_temporary(self, df: pd.DataFrame, fitted_params: dict = None) -> pd.DataFrame:
         """
         Stage 1: Temporary normalization using model-free threshold method
         
-        F0 = minimum fluorescence value (per concentration)
-        Fmax = maximum fluorescence value (per concentration)
+        F0 = minimum fluorescence value (per concentration) OR fitted F0 from Data Load mode
+        Fmax = maximum fluorescence value (per concentration) OR fitted Fmax from Data Load mode
         
         Parameters:
         - df: DataFrame with standardized units
+        - fitted_params: Optional dict mapping concentration to {'F0': float, 'Fmax': float}
+                        from Data Load mode results
         
         Returns:
         - DataFrame with temporary alpha, F0_temp, Fmax_temp columns
@@ -252,12 +254,19 @@ class DataNormalizer:
         
         def temp_normalize_group(g):
             g_sorted = g.sort_values(self.time_col)
+            conc_value = g_sorted[self.conc_col].iloc[0]
             
-            # F0: minimum fluorescence value
-            F0_temp = float(g_sorted[self.fluor_col].min())
-            
-            # Fmax: maximum fluorescence value
-            Fmax_temp = float(g_sorted[self.fluor_col].max())
+            # Check if fitted parameters are available
+            if fitted_params is not None and conc_value in fitted_params:
+                # Use fitted parameters from Data Load mode
+                F0_temp = float(fitted_params[conc_value]['F0'])
+                Fmax_temp = float(fitted_params[conc_value]['Fmax'])
+            else:
+                # F0: minimum fluorescence value
+                F0_temp = float(g_sorted[self.fluor_col].min())
+                
+                # Fmax: maximum fluorescence value
+                Fmax_temp = float(g_sorted[self.fluor_col].max())
             
             # Ensure Fmax > F0
             if Fmax_temp <= F0_temp:
@@ -280,15 +289,17 @@ class DataNormalizer:
         df_normalized = df_temp.groupby(self.conc_col, group_keys=False).apply(temp_normalize_group)
         return df_normalized
     
-    def normalize_final(self, df: pd.DataFrame) -> pd.DataFrame:
+    def normalize_final(self, df: pd.DataFrame, fitted_params: dict = None) -> pd.DataFrame:
         """
         Stage 2: Final normalization using region information
         
-        F0 = minimum fluorescence value (same as temporary)
-        Fmax = plateau region average (or F∞ from exponential region if no plateau)
+        F0 = minimum fluorescence value (same as temporary) OR fitted F0 from Data Load mode
+        Fmax = plateau region average (or F∞ from exponential region if no plateau) OR fitted Fmax from Data Load mode
         
         Parameters:
         - df: DataFrame with temporary normalization and region division
+        - fitted_params: Optional dict mapping concentration to {'F0': float, 'Fmax': float}
+                        from Data Load mode results. If provided, uses fitted values instead of region-based calculation.
         
         Returns:
         - DataFrame with final alpha, F0, Fmax columns
@@ -298,57 +309,65 @@ class DataNormalizer:
         
         def final_normalize_group(g):
             g_sorted = g.sort_values(self.time_col)
+            conc_value = g_sorted[self.conc_col].iloc[0]
             
-            # F0: same as temporary (minimum)
-            F0 = float(g_sorted['F0_temp'].iloc[0])
-            
-            # Fmax: determine based on region
-            if 'region' not in g_sorted.columns:
-                # No region info, fallback to temporary Fmax
-                Fmax = float(g_sorted['Fmax_temp'].iloc[0])
-                region_used = 'fallback_temp'
+            # Check if fitted parameters are available
+            if fitted_params is not None and conc_value in fitted_params:
+                # Use fitted parameters from Data Load mode (preferred)
+                F0 = float(fitted_params[conc_value]['F0'])
+                Fmax = float(fitted_params[conc_value]['Fmax'])
+                region_used = 'fitted_from_data_load'
             else:
-                # Check if plateau region exists
-                plateau_data = g_sorted[g_sorted['region'] == 'plateau']
+                # F0: same as temporary (minimum)
+                F0 = float(g_sorted['F0_temp'].iloc[0])
                 
-                if len(plateau_data) > 0:
-                    # Use plateau region average
-                    Fmax = float(plateau_data[self.fluor_col].mean())
-                    region_used = 'plateau_mean'
+                # Fmax: determine based on region
+                if 'region' not in g_sorted.columns:
+                    # No region info, fallback to temporary Fmax
+                    Fmax = float(g_sorted['Fmax_temp'].iloc[0])
+                    region_used = 'fallback_temp'
                 else:
-                    # No plateau, fit exponential to exponential region
-                    exp_data = g_sorted[g_sorted['region'] == 'exponential']
+                    # Check if plateau region exists
+                    plateau_data = g_sorted[g_sorted['region'] == 'plateau']
                     
-                    if len(exp_data) >= 3:
-                        # Fit exponential to determine F∞
-                        try:
-                            t_data = exp_data[self.time_col].values
-                            F_data = exp_data[self.fluor_col].values
-                            
-                            def exp_func(t, A, k):
-                                return F0 + A * (1 - np.exp(-k * t))
-                            
-                            A_guess = F_data[-1] - F0 if len(F_data) > 0 else 1000
-                            p0 = [A_guess, 0.1]
-                            
-                            popt, _ = curve_fit(
-                                exp_func, t_data, F_data,
-                                p0=p0,
-                                bounds=([0, 0.001], [np.inf, 10]),
-                                maxfev=5000
-                            )
-                            
-                            A_fit, _ = popt
-                            Fmax = F0 + A_fit  # F∞
-                            region_used = 'exponential_Finf'
-                        except:
-                            # Fallback to maximum
+                    if len(plateau_data) > 0:
+                        # Use plateau region average
+                        Fmax = float(plateau_data[self.fluor_col].mean())
+                        region_used = 'plateau_mean'
+                    else:
+                        # No plateau, fit exponential to exponential region
+                        exp_data = g_sorted[g_sorted['region'] == 'exponential']
+                        
+                        if len(exp_data) >= 3:
+                            # Fit exponential to determine F∞
+                            try:
+                                t_data = exp_data[self.time_col].values
+                                F_data = exp_data[self.fluor_col].values
+                                
+                                def exp_func(t, A, k):
+                                    return F0 + A * (1 - np.exp(-k * t))
+                                
+                                A_guess = F_data[-1] - F0 if len(F_data) > 0 else 1000
+                                p0 = [A_guess, 0.1]
+                                
+                                popt, _ = curve_fit(
+                                    exp_func, t_data, F_data,
+                                    p0=p0,
+                                    bounds=([0, 0.001], [np.inf, 10]),
+                                    maxfev=5000
+                                )
+                                
+                                A_fit, _ = popt
+                                Fmax = F0 + A_fit  # F∞
+                                region_used = 'exponential_Finf'
+                            except:
+                                # Fallback to maximum
+                                Fmax = float(g_sorted[self.fluor_col].max())
+                                region_used = 'fallback_max'
+                        else:
+                            # Not enough exponential data, use maximum
                             Fmax = float(g_sorted[self.fluor_col].max())
                             region_used = 'fallback_max'
-                    else:
-                        # Not enough exponential data, use maximum
-                        Fmax = float(g_sorted[self.fluor_col].max())
-                        region_used = 'fallback_max'
             
             # Ensure Fmax > F0
             if Fmax <= F0:

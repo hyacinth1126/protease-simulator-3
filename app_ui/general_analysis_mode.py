@@ -162,94 +162,45 @@ def general_analysis_mode(st):
             else:
                 rfu_col = 'RFU_Interpolated'  # 기본값
     
-    # 원본 측정 데이터 읽기 (raw.csv에서 직접)
-    # 보간된 곡선이 아닌 실제 측정 포인트만 사용
-    try:
-        from mode_prep_raw_data.prep import read_raw_data
-        raw_data_dict = read_raw_data('mode_prep_raw_data/raw.csv')
-        
-        # 원본 측정 포인트로 변환
-        df_raw_converted = []
-        for conc_name, data in raw_data_dict.items():
-            times = data['time']
-            values = data['value']
-            sds = data.get('SD', [0] * len(times))
-            
-            for time, value, sd in zip(times, values, sds):
-                df_raw_converted.append({
-                    'time_min': time,
-                    'enzyme_ugml': data['concentration'],
-                    'FL_intensity': value,
-                    'SD': sd
-                })
-        
-        df_raw = pd.DataFrame(df_raw_converted)
-        st.sidebar.info("✅ 원본 측정 데이터 사용 (raw.csv)")
-        
-    except Exception as e:
-        # Fallback: 보간된 곡선 데이터 사용 (원본 데이터를 찾을 수 없는 경우)
-        st.sidebar.warning(f"⚠️ 원본 데이터를 찾을 수 없어 보간된 곡선 데이터를 사용합니다: {e}")
-        
-        # Detect RFU column name
-        rfu_col = None
-        if 'RFU_Calculated' in df_fitted.columns:
-            rfu_col = 'RFU_Calculated'
-        elif 'RFU_Interpolated' in df_fitted.columns:
-            rfu_col = 'RFU_Interpolated'
-        else:
-            st.error("RFU 데이터 컬럼을 찾을 수 없습니다. (RFU_Calculated 또는 RFU_Interpolated)")
-            st.stop()
-        
-        # 원본 측정 시간 포인트만 필터링 (보간된 곡선에서 원본 시간만 추출)
-        # raw.csv의 시간 포인트와 일치하는 것만 사용
-        try:
-            raw_df = pd.read_csv('mode_prep_raw_data/raw.csv', sep='\t', skiprows=[0, 1])
-            original_times = set(raw_df['time_min'].unique())
-            
-            # 원본 시간 포인트만 필터링
-            df_fitted_filtered = df_fitted[df_fitted['Time_min'].isin(original_times)].copy()
-            
-            if len(df_fitted_filtered) == 0:
-                # 필터링 실패 시 전체 사용
-                df_fitted_filtered = df_fitted.copy()
-        except:
-            # raw.csv를 읽을 수 없으면 전체 사용
-            df_fitted_filtered = df_fitted.copy()
-        
-        # Pivot data to get one row per time point with columns for each concentration
-        df_raw_converted = []
-        unique_times = sorted(df_fitted_filtered['Time_min'].unique())
-        
-        for time in unique_times:
-            time_data = df_fitted_filtered[df_fitted_filtered['Time_min'] == time]
-            
-            # Create row for each concentration
-            for _, row in time_data.iterrows():
-                conc_ugml = row.get('Concentration [ug/mL]', 0)
-                rfu = row[rfu_col]
-                
-                df_raw_converted.append({
-                    'time_min': time,
-                    'enzyme_ugml': conc_ugml,
-                    'FL_intensity': rfu,
-                    'SD': 0  # Fitted curves don't have SD
-                })
-        
-        df_raw = pd.DataFrame(df_raw_converted)
+    # 엑셀 파일의 보간된 곡선 데이터 사용
+    # Detect RFU column name
+    rfu_col = None
+    if 'RFU_Calculated' in df_fitted.columns:
+        rfu_col = 'RFU_Calculated'
+    elif 'RFU_Interpolated' in df_fitted.columns:
+        rfu_col = 'RFU_Interpolated'
+    else:
+        st.error("RFU 데이터 컬럼을 찾을 수 없습니다. (RFU_Calculated 또는 RFU_Interpolated)")
+        st.stop()
     
-    # 원본 시간 범위 저장 (raw.csv에서 직접 읽기)
-    try:
-        # raw.csv 파일에서 최대 시간 값 읽기
-        raw_df = pd.read_csv('mode_prep_raw_data/raw.csv', sep='\t', skiprows=[0, 1])
-        original_time_max = raw_df['time_min'].max()
-    except Exception:
-        # 실패 시 df_raw에서 추정
-        original_time_max = df_raw['time_min'].max()
+    # 엑셀 파일의 데이터를 변환
+    df_raw_converted = []
+    unique_times = sorted(df_fitted['Time_min'].unique())
     
-    # 원본 측정 포인트 수 계산
+    for time in unique_times:
+        time_data = df_fitted[df_fitted['Time_min'] == time]
+        
+        # Create row for each concentration
+        for _, row in time_data.iterrows():
+            conc_ugml = row.get('Concentration [ug/mL]', 0)
+            rfu = row[rfu_col]
+            
+            df_raw_converted.append({
+                'time_min': time,
+                'enzyme_ugml': conc_ugml,
+                'FL_intensity': rfu,
+                'SD': 0  # 보간된 곡선 데이터는 SD 없음
+            })
+    
+    df_raw = pd.DataFrame(df_raw_converted)
+    
+    # 시간 범위 저장
+    original_time_max = df_raw['time_min'].max()
+    
+    # 데이터 정보
     unique_times = sorted(df_raw['time_min'].unique())
     unique_concs = sorted(df_raw['enzyme_ugml'].unique())
-    st.sidebar.success(f"✅ {len(unique_concs)}개 농도 조건, {len(unique_times)}개 원본 측정 포인트 로드됨")
+    st.sidebar.success(f"✅ {len(unique_concs)}개 농도 조건, {len(unique_times)}개 시간 포인트 로드됨")
     
     # Store data source type for later use
     st.session_state['data_source_type'] = 'Fitted Curves (from Data Load mode)'
@@ -265,6 +216,73 @@ def general_analysis_mode(st):
             # rfu_col이 없으면 기본값 사용
             st.session_state['rfu_col'] = 'RFU_Interpolated'
     
+    # MM Results 시트에서 F0, Fmax 직접 읽기
+    fitted_params = None
+    xlsx_path_for_mm_results = None
+    
+    # 업로드된 파일 또는 자동 로드된 파일 경로 확인
+    if uploaded_file is not None:
+        import tempfile
+        file_extension = uploaded_file.name.split('.')[-1].lower()
+        if file_extension == 'xlsx':
+            with tempfile.NamedTemporaryFile(delete=False, suffix='.xlsx', mode='wb') as tmp_file:
+                tmp_file.write(uploaded_file.getbuffer())
+                xlsx_path_for_mm_results = tmp_file.name
+    else:
+        # 자동 로드된 파일 경로 사용
+        xlsx_paths = [
+            'Michaelis-Menten_calibration_results.xlsx',
+            str(Path(__file__).parent.parent / 'Michaelis-Menten_calibration_results.xlsx'),
+        ]
+        for path in xlsx_paths:
+            if os.path.exists(path):
+                xlsx_path_for_mm_results = path
+                break
+    
+    # MM Results 시트 읽기
+    if xlsx_path_for_mm_results is not None:
+        try:
+            df_mm_results = pd.read_excel(xlsx_path_for_mm_results, sheet_name='MM Results', engine='openpyxl')
+            
+            if df_mm_results is not None and 'F0' in df_mm_results.columns and 'Fmax' in df_mm_results.columns:
+                fitted_params = {}
+                conc_col_name = 'Concentration [ug/mL]' if 'Concentration [ug/mL]' in df_mm_results.columns else 'Concentration'
+                
+                for _, row in df_mm_results.iterrows():
+                    conc_value = row[conc_col_name]
+                    if pd.notna(conc_value) and pd.notna(row['F0']) and pd.notna(row['Fmax']):
+                        try:
+                            conc_float = float(conc_value)
+                            fitted_params[conc_float] = {
+                                'F0': float(row['F0']),
+                                'Fmax': float(row['Fmax'])
+                            }
+                        except (ValueError, TypeError):
+                            continue
+                
+                if len(fitted_params) > 0:
+                    st.sidebar.success(f"✅ {len(fitted_params)}개 농도 조건의 F0, Fmax 파라미터 로드 완료 (MM Results 시트)")
+                    st.session_state['fitted_params'] = fitted_params
+                else:
+                    fitted_params = None
+                    st.session_state['fitted_params'] = None
+            else:
+                fitted_params = None
+                st.session_state['fitted_params'] = None
+        except Exception:
+            fitted_params = None
+            st.session_state['fitted_params'] = None
+        finally:
+            # 임시 파일 삭제
+            if uploaded_file is not None and xlsx_path_for_mm_results and os.path.exists(xlsx_path_for_mm_results):
+                try:
+                    os.unlink(xlsx_path_for_mm_results)
+                except:
+                    pass
+    else:
+        fitted_params = None
+        st.session_state['fitted_params'] = None
+    
     # Step 2: Standardize units
     standardizer = UnitStandardizer(enzyme_mw=enzyme_mw)
     df_standardized = standardizer.standardize(df_raw)
@@ -273,24 +291,18 @@ def general_analysis_mode(st):
     time_unit = 'min' if 'time_min' in df_raw.columns else 's'
     st.session_state['time_unit'] = time_unit
     
-    # Step 3-4: Iterative normalization and region division
+    # Step 3-4: Normalization and region division
     normalizer = DataNormalizer()
     region_divider = RegionDivider()
     
-    # Read iteration setting from session (set in 정규화 탭); default 2
-    max_iterations = int(st.session_state.get('max_iterations', 2))
+    # Step 3-1: Initial temporary normalization (model-free threshold or fitted params)
+    df_current = normalizer.normalize_temporary(df_standardized, fitted_params=fitted_params)
     
-    # Step 3-1: Initial temporary normalization (model-free threshold)
-    df_current = normalizer.normalize_temporary(df_standardized)
+    # Step 4: Divide regions
+    df_current = region_divider.divide_regions(df_current)
     
-    # Iterative loop: Divide regions → Final normalization → Divide regions → ...
-    for iteration in range(max_iterations):
-        
-        # Step 4: Divide regions
-        df_current = region_divider.divide_regions(df_current)
-        
-        # Step 3-2: Final normalization (using current region information)
-        df_current = normalizer.normalize_final(df_current)
+    # Step 3-2: Final normalization (using region information or fitted params)
+    df_current = normalizer.normalize_final(df_current, fitted_params=fitted_params)
     
     df = df_current
     
@@ -413,23 +425,32 @@ def general_analysis_mode(st):
     with tab2:
         # Controls and method description for normalization
         st.subheader("정규화 설정 및 방법")
-        st.caption("최종 정규화와 구간 구분을 반복하며 수렴시킵니다.")
-        st.number_input(
-            "정규화-구간 반복 횟수",
-            min_value=2,
-            max_value=10,
-            value=int(st.session_state.get('max_iterations', 2)),
-            step=1,
-            key="max_iterations",
-            help="최소 2회 이상 권장. 값을 변경하면 화면이 다시 계산됩니다."
-        )
+        
+        # Check if fitted parameters are being used
+        fitted_params_used = st.session_state.get('fitted_params', None)
+        using_fitted_params = fitted_params_used is not None and len(fitted_params_used) > 0
+        if using_fitted_params:
+            st.success(f"✅ F0, Fmax 파라미터 로드 완료 ({len(fitted_params_used)}개 농도 조건)")
+            st.info("💡 F0, Fmax 값은 MM Results 시트에서 가져온 값입니다.")
+        else:
+            st.info("ℹ️ 기본 정규화 방식 사용 중 (원본 데이터에서 F0, Fmax 계산)")
+        
         with st.expander("정규화 방법 보기", expanded=False):
-            st.markdown("""
-            - 각 농도별 지수 피팅: F(t) = F₀ + A·(1−e⁻ᵏᵗ)
-            - 점근선 Fmax = F₀ + A 사용
-            - α(t) = (F(t) − F₀) / (Fmax − F₀)
-            """)
-        st.markdown(f"현재 반복 횟수: **{int(st.session_state.get('max_iterations', 2))}**")
+            if using_fitted_params:
+                st.markdown("""
+                **MM Results 시트에서 F0, Fmax 사용:**
+                - F0, Fmax: Data Load 모드에서 생성된 MM Results 시트에서 직접 읽어옴
+                - 곡선: F(t) = F₀ + (Fmax - F₀)·[1 - exp(-k·t)]
+                - α(t) = (F(t) − F₀) / (Fmax − F₀)
+                - Data Load 모드에서 이미 계산된 파라미터를 그대로 사용
+                """)
+            else:
+                st.markdown("""
+                **기본 정규화 방식:**
+                - 각 농도별 지수 피팅: F(t) = F₀ + A·(1−e⁻ᵏᵗ)
+                - 점근선 Fmax = F₀ + A 사용
+                - α(t) = (F(t) − F₀) / (Fmax − F₀)
+                """)
 
         fig_norm = Visualizer.plot_normalized_data(df, conc_unit, time_label, 
                                                    use_lines=True,
@@ -443,8 +464,25 @@ def general_analysis_mode(st):
             fig_norm.update_xaxes(range=[0, original_time_max])
         st.plotly_chart(fig_norm, use_container_width=True)
         
+        # 시간-농도 그래프 추가
+        st.subheader("시간-농도 그래프")
+        fig_heatmap = Visualizer.plot_time_concentration_heatmap(df, conc_unit, time_label,
+                                                                 enzyme_name=enzyme_name,
+                                                                 substrate_name=substrate_name)
+        # 원본 시간 범위로 xaxis 설정
+        original_time_max = st.session_state.get('original_time_max', df['time_s'].max())
+        if time_unit == 'min':
+            fig_heatmap.update_xaxes(range=[0, original_time_max])
+        else:
+            fig_heatmap.update_xaxes(range=[0, original_time_max])
+        st.plotly_chart(fig_heatmap, use_container_width=True)
+        
         # Summary statistics
-        st.subheader("정규화 요약 (지수 피팅 기반)")
+        fitted_params_used = st.session_state.get('fitted_params', None)
+        if fitted_params_used is not None and len(fitted_params_used) > 0:
+            st.subheader("정규화 요약 (MM Results 시트 사용)")
+        else:
+            st.subheader("정규화 요약 (지수 피팅 기반)")
         
         summary_data = []
         for conc in sorted(df[conc_col].unique()):
@@ -452,11 +490,13 @@ def general_analysis_mode(st):
             # Check if optional columns exist
             fmax_std = f"{subset['Fmax_std'].iloc[0]:.1f}" if 'Fmax_std' in subset.columns else "N/A"
             fit_k = f"{subset['fit_k'].iloc[0]:.4f}" if 'fit_k' in subset.columns else "N/A"
+            fmax_method = subset['Fmax_method'].iloc[0] if 'Fmax_method' in subset.columns else "N/A"
             
             summary_data.append({
                 f'농도 ({conc_unit})': conc,
                 'F0 (초기)': f"{subset['F0'].iloc[0]:.1f}",
                 'Fmax (점근선)': f"{subset['Fmax'].iloc[0]:.1f}",
+                'Fmax 방법': fmax_method,
                 'Fmax 표준편차': fmax_std,
                 '피팅 k (s⁻¹)': fit_k,
                 'α 범위': f"{subset['alpha'].min():.3f} - {subset['alpha'].max():.3f}",
@@ -466,7 +506,10 @@ def general_analysis_mode(st):
         summary_df = pd.DataFrame(summary_data)
         st.dataframe(summary_df, use_container_width=True)
         
-        st.info("📊 각 농도별로 F(t) = F0 + A·(1-exp(-k·t)) 형태의 지수 함수를 피팅하여 점근선 Fmax를 결정합니다.")
+        if fitted_params_used is not None and len(fitted_params_used) > 0:
+            st.info("📊 F0, Fmax 값은 MM Results 시트에서 가져온 값입니다.")
+        else:
+            st.info("📊 각 농도별로 F(t) = F0 + A·(1-exp(-k·t)) 형태의 지수 함수를 피팅하여 점근선 Fmax를 결정합니다.")
     
     with tab3:
         st.subheader("🔬 글로벌 모델 피팅")

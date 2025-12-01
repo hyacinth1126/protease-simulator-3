@@ -276,17 +276,22 @@ def data_load_mode(st):
         except:
             n_value = 50
         
-        col1, col2, col3 = st.columns(3)
+        # 농도별 데이터 포인트 수 계산 (모든 농도에서 동일)
+        sorted_conc = sorted(raw_data.items(), key=lambda x: x[1]['concentration'])
+        num_data_points = len(sorted_conc[0][1]['time']) if len(sorted_conc) > 0 else 0
+        
+        col1, col2, col3, col4 = st.columns(4)
         with col1:
             st.metric("농도 조건 수", len(raw_data))
         with col2:
-            st.metric("반응 시간", reaction_time)
+            st.metric("농도별 데이터 포인트 수", num_data_points)
         with col3:
+            st.metric("반응 시간", reaction_time)
+        with col4:
             st.metric("N(시험 수)", n_value)
         
         # 농도별 정보 표시
         with st.expander("농도별 데이터 정보", expanded=False):
-            sorted_conc = sorted(raw_data.items(), key=lambda x: x[1]['concentration'])
             first_data = sorted_conc[0][1]
             times = first_data['time']
             
@@ -317,27 +322,26 @@ def data_load_mode(st):
                     times = data['time']
                     values = data['value']
                     
-                    # Exponential Association 모델로 피팅
-                    params, fit_values, r_sq = fit_time_course(times, values, model='exponential')
+                    # 초기 속도 계산 (선형 구간 분석)
+                    params, fit_values, r_sq = fit_time_course(times, values, model='linear')
                     
-                    # MM 파라미터 추출
-                    Vmax = params['Vmax']
-                    Km = params['Km']
-                    F0 = params['F0']
-                    Fmax = params['Fmax']
+                    # 초기 속도 파라미터 추출
+                    v0 = params['v0']  # 초기 속도
+                    F0 = params['F0']  # 초기 형광값
+                    Fmax = params['Fmax']  # 최대 형광값
                     
                     mm_results[conc_name] = {
                         'concentration': data['concentration'],
-                        'Vmax': Vmax,
-                        'Km': Km,
+                        'v0': v0,
                         'F0': F0,
                         'Fmax': Fmax,
-                        'k': params['k'],
-                        'R_squared': r_sq
+                        'R_squared': r_sq,
+                        'linear_fraction': params['linear_fraction']
                     }
                     
-                    # Fit curve 데이터 저장
-                    for t, val, fit_val in zip(times, values, fit_values):
+                    # Fit curve 데이터 저장 (선형 구간만)
+                    valid_mask = ~np.isnan(fit_values)
+                    for t, val, fit_val in zip(times[valid_mask], values[valid_mask], fit_values[valid_mask]):
                         all_fit_data.append({
                             'Concentration': conc_name,
                             'Concentration [ug/mL]': data['concentration'],
@@ -372,12 +376,15 @@ def data_load_mode(st):
                 
                 all_interp_data = []
                 for conc_name, params in mm_results.items():
+                    v0 = params['v0']
                     F0 = params['F0']
                     Fmax = params['Fmax']
-                    k = params['k']
                     
-                    # X → Y 보간
-                    y_interp = exponential_association(x_interp, F0, Fmax, k)
+                    # 선형 피팅으로 보간 (v0 = 기울기)
+                    # F(t) = F0 + v0 * t
+                    y_interp = F0 + v0 * x_interp
+                    # Fmax를 넘지 않도록 제한
+                    y_interp = np.clip(y_interp, F0, Fmax)
                     
                     for x, y in zip(x_interp, y_interp):
                         all_interp_data.append({
@@ -389,28 +396,104 @@ def data_load_mode(st):
                 
                 interp_df = pd.DataFrame(all_interp_data)
                 
-                progress_bar.progress(0.8)
+                progress_bar.progress(0.7)
                 
-                # 4. 결과 저장
-                status_text.text("4️⃣ 결과 저장 중...")
+                # 4. v₀ vs [S]에 Michaelis-Menten 피팅
+                status_text.text("4️⃣ v₀ vs [S] Michaelis-Menten 피팅 중...")
                 
-                # MM Results 저장
+                # 농도와 초기 속도 데이터 수집
+                concentrations = [params['concentration'] for params in sorted(mm_results.values(), 
+                                                                              key=lambda x: x['concentration'])]
+                v0_values = [params['v0'] for params in sorted(mm_results.values(), 
+                                                              key=lambda x: x['concentration'])]
+                
+                # MM calibration curve 피팅: v₀ = Vmax * [S] / (Km + [S])
+                if len(concentrations) >= 2 and len(v0_values) >= 2:
+                    try:
+                        cal_params, cal_fit_values, cal_equation = fit_calibration_curve(concentrations, v0_values)
+                        Vmax = cal_params['Vmax_cal']
+                        Km = cal_params['Km_cal']
+                        mm_r_squared = cal_params['R_squared']
+                        
+                        # kcat 계산 (enzyme 농도 필요 - 일단 None으로 설정, 나중에 사용자 입력 받을 수 있음)
+                        kcat = None
+                        mm_fit_success = True
+                    except Exception as e:
+                        st.warning(f"⚠️ MM 피팅 실패: {e}")
+                        Vmax = None
+                        Km = None
+                        kcat = None
+                        mm_r_squared = 0
+                        cal_equation = "피팅 실패"
+                        mm_fit_success = False
+                else:
+                    Vmax = None
+                    Km = None
+                    kcat = None
+                    mm_r_squared = 0
+                    cal_equation = "데이터 부족 (최소 2개 농도 필요)"
+                    mm_fit_success = False
+                
+                progress_bar.progress(0.85)
+                
+                # 5. 결과 저장
+                status_text.text("5️⃣ 결과 저장 중...")
+                
+                # 초기 속도 Results 저장 (MM 파라미터 포함)
                 results_data = []
                 for conc_name, params in sorted(mm_results.items(), key=lambda x: x[1]['concentration']):
-                    eq = f"F(t) = {params['F0']:.2f} + ({params['Fmax'] - params['F0']:.2f}) * [1 - exp(-{params['k']:.4f}*t)]"
+                    eq = f"v0 = {params['v0']:.2f} (선형 구간 기울기)"
                     results_data.append({
                         'Concentration': conc_name,
                         'Concentration [ug/mL]': params['concentration'],
+                        'v0': params['v0'],
                         'F0': params['F0'],
                         'Fmax': params['Fmax'],
-                        'k': params['k'],
-                        'Vmax': params['Vmax'],
-                        'Km': params['Km'],
                         'R_squared': params['R_squared'],
+                        'linear_fraction': params['linear_fraction'],
                         'Equation': eq
                     })
                 
                 mm_results_df = pd.DataFrame(results_data)
+                
+                # 저장된 xlsx 파일에서 enzyme 농도 읽기 시도 (kcat 계산용)
+                enzyme_conc = None
+                try:
+                    xlsx_path = 'Michaelis-Menten_calibration_results.xlsx'
+                    if os.path.exists(xlsx_path):
+                        df_mm_read = pd.read_excel(xlsx_path, sheet_name='MM Results', engine='openpyxl')
+                        # enzyme 농도 컬럼 찾기 (다양한 이름 시도)
+                        enzyme_conc_col = None
+                        for col in ['Enzyme [ug/mL]', 'Enzyme_ug/mL', 'enzyme_ug/mL', '[E] (ug/mL)', 'E_conc', 'Enzyme']:
+                            if col in df_mm_read.columns:
+                                enzyme_conc_col = col
+                                break
+                        
+                        if enzyme_conc_col is not None:
+                            # 첫 번째 유효한 enzyme 농도 값 사용
+                            enzyme_conc_values = df_mm_read[enzyme_conc_col].dropna()
+                            if len(enzyme_conc_values) > 0:
+                                enzyme_conc = float(enzyme_conc_values.iloc[0])
+                except Exception as e:
+                    # enzyme 농도 읽기 실패해도 계속 진행
+                    pass
+                
+                # kcat 계산: kcat = Vmax / [E]_T
+                if mm_fit_success and Vmax is not None and enzyme_conc is not None and enzyme_conc > 0:
+                    kcat = Vmax / enzyme_conc
+                else:
+                    kcat = None
+                
+                # MM 피팅 결과를 별도로 저장
+                mm_fit_results = {
+                    'Vmax': Vmax,
+                    'Km': Km,
+                    'kcat': kcat,
+                    'enzyme_conc': enzyme_conc,
+                    'R_squared': mm_r_squared,
+                    'equation': cal_equation,
+                    'fit_success': mm_fit_success
+                }
                 
                 try:
                     # Interpolated curves 저장 (CSV)
@@ -430,11 +513,16 @@ def data_load_mode(st):
                 st.session_state['interpolation_results'] = {
                     'interp_df': interp_df,
                     'mm_results_df': mm_results_df,
+                    'mm_fit_results': mm_fit_results,
                     'x_range_min': x_range_min,
                     'x_range_max': x_range_max,
                     'x_data_min': x_data_min,
                     'x_data_max': x_data_max,
-                    'raw_data': raw_data
+                    'raw_data': raw_data,
+                    'v0_vs_concentration': {
+                        'concentrations': concentrations,
+                        'v0_values': v0_values
+                    }
                 }
         
         # 결과 표시
@@ -444,13 +532,30 @@ def data_load_mode(st):
             st.markdown("---")
             st.subheader("📊 Michaelis-Menten 모델 결과")
             
+            # MM 피팅 결과 표시 (Vmax, Km, kcat)
+            if 'mm_fit_results' in results and results['mm_fit_results']['fit_success']:
+                mm_fit = results['mm_fit_results']
+                col1, col2, col3, col4 = st.columns(4)
+                with col1:
+                    st.metric("Vmax", f"{mm_fit['Vmax']:.2f}" if mm_fit['Vmax'] is not None else "N/A")
+                with col2:
+                    st.metric("Km (μg/mL)", f"{mm_fit['Km']:.4f}" if mm_fit['Km'] is not None else "N/A")
+                with col3:
+                    st.metric("kcat", f"{mm_fit['kcat']:.2f}" if mm_fit['kcat'] is not None else "N/A")
+                with col4:
+                    st.metric("R²", f"{mm_fit['R_squared']:.4f}")
+                
+                st.info(f"**MM 방정식:** {mm_fit['equation']}")
+            elif 'mm_fit_results' in results:
+                st.warning("⚠️ MM 피팅 실패 또는 데이터 부족")
+            
             # 탭 구성
-            tabs = ["📈 Michaelis-Menten Curves", "📋 Data Table"]
+            tabs = ["📈 Time-Fluorescence Curves", "📊 v₀ vs [S] MM Fit", "📋 Data Table"]
             tab_objects = st.tabs(tabs)
             
-            # Tab 1: 그래프
+            # Tab 1: Time-Fluorescence 그래프
             with tab_objects[0]:
-                st.subheader("Michaelis-Menten Curves")
+                st.subheader("Time-Fluorescence Curves")
                 
                 fig = go.Figure()
                 colors = ['blue', 'red', 'orange', 'green', 'purple', 'brown', 'pink', 'gray', 'olive', 'cyan']
@@ -508,51 +613,123 @@ def data_load_mode(st):
                 
                 st.plotly_chart(fig, use_container_width=True)
             
-            # Tab 2: 데이터 테이블
+            # Tab 2: v₀ vs [S] MM Fit 그래프
             with tab_objects[1]:
+                st.subheader("v₀ vs [S] Michaelis-Menten Fit")
+                
+                if 'v0_vs_concentration' in results and 'mm_fit_results' in results:
+                    v0_data = results['v0_vs_concentration']
+                    mm_fit = results['mm_fit_results']
+                    
+                    fig_v0 = go.Figure()
+                    
+                    # 실험 데이터 포인트
+                    fig_v0.add_trace(go.Scatter(
+                        x=v0_data['concentrations'],
+                        y=v0_data['v0_values'],
+                        mode='markers',
+                        name='Experimental v₀',
+                        marker=dict(size=10, color='red', line=dict(width=2, color='black'))
+                    ))
+                    
+                    # MM 피팅 곡선
+                    if mm_fit['fit_success'] and mm_fit['Vmax'] is not None and mm_fit['Km'] is not None:
+                        conc_min = min(v0_data['concentrations'])
+                        conc_max = max(v0_data['concentrations'])
+                        conc_range = np.linspace(conc_min * 0.5, conc_max * 1.5, 200)
+                        v0_fitted = michaelis_menten_calibration(conc_range, mm_fit['Vmax'], mm_fit['Km'])
+                        
+                        fig_v0.add_trace(go.Scatter(
+                            x=conc_range,
+                            y=v0_fitted,
+                            mode='lines',
+                            name=f'MM Fit: {mm_fit["equation"]}',
+                            line=dict(width=2.5, color='blue')
+                        ))
+                        
+                        # 통계 정보
+                        stats_text = f"Vmax = {mm_fit['Vmax']:.2f}<br>"
+                        stats_text += f"Km = {mm_fit['Km']:.4f} μg/mL<br>"
+                        stats_text += f"R² = {mm_fit['R_squared']:.4f}"
+                        
+                        fig_v0.add_annotation(
+                            xref="paper", yref="paper",
+                            x=0.05, y=0.95,
+                            xanchor='left', yanchor='top',
+                            text=stats_text,
+                            showarrow=False,
+                            bgcolor="rgba(255,255,255,0.8)",
+                            bordercolor="blue",
+                            borderwidth=2,
+                            font=dict(size=11)
+                        )
+                    
+                    fig_v0.update_layout(
+                        title='Initial Velocity (v₀) vs Substrate Concentration [S]',
+                        xaxis_title='[S] (μg/mL)',
+                        yaxis_title='Initial Velocity v₀ (Fluorescence Units / Time)',
+                        template='plotly_white',
+                        height=600,
+                        hovermode='x unified'
+                    )
+                    
+                    st.plotly_chart(fig_v0, use_container_width=True)
+                else:
+                    st.warning("v₀ vs [S] 데이터가 없습니다.")
+            
+            # Tab 3: 데이터 테이블
+            with tab_objects[2]:
                 st.subheader("상세 파라미터")
                 
                 # 상세 파라미터 테이블
-                detail_cols = ['Concentration [ug/mL]', 'F0', 'Fmax', 'k', 'Vmax', 'Km', 'R_squared', 'Equation']
+                detail_cols = ['Concentration [ug/mL]', 'v0', 'F0', 'Fmax', 'R_squared', 'linear_fraction', 'Equation']
                 available_cols = [col for col in detail_cols if col in results['mm_results_df'].columns]
                 st.dataframe(results['mm_results_df'][available_cols], use_container_width=True, hide_index=True)
                 
-                # XLSX 다운로드 버튼 및 자동 저장
+                # 파일 다운로드 버튼
                 st.markdown("---")
-                try:
-                    from io import BytesIO
-                    output = BytesIO()
-                    with pd.ExcelWriter(output, engine='openpyxl') as writer:
-                        results['mm_results_df'][available_cols].to_excel(writer, sheet_name='MM Results', index=False)
-                        results['interp_df'].to_excel(writer, sheet_name='Michaelis-Menten Curves', index=False)
-                    output.seek(0)
-                    xlsx_data = output.getvalue()
-                    
-                    # XLSX 파일 자동 저장 (Analysis 모드에서 자동 로드용)
-                    try:
-                        with open('Michaelis-Menten_calibration_results.xlsx', 'wb') as f:
-                            f.write(xlsx_data)
-                    except Exception as save_err:
-                        st.sidebar.warning(f"⚠️ XLSX 파일 자동 저장 실패: {save_err}")
-                    
+                col1, col2 = st.columns(2)
+                
+                # MM Results CSV 다운로드
+                with col1:
+                    mm_results_csv = results['mm_results_df'][available_cols].to_csv(index=False)
                     st.download_button(
-                        label="📥 결과 다운로드 (XLSX)",
-                        data=xlsx_data,
-                        file_name="Michaelis-Menten_calibration_results.xlsx",
-                        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                        use_container_width=True
-                    )
-                except Exception as e:
-                    st.warning(f"XLSX 다운로드 준비 중 오류: {e}")
-                    # CSV로 대체
-                    csv_results = results['mm_results_df'][available_cols].to_csv(index=False)
-                    st.download_button(
-                        label="📥 결과 다운로드 (XLSX)",
-                        data=csv_results,
-                        file_name="Michaelis-Menten_calibration_results.xlsx",
+                        label="📥 MM Results 다운로드 (CSV)",
+                        data=mm_results_csv,
+                        file_name="MM_Results.csv",
                         mime="text/csv",
-                        use_container_width=True
+                        use_container_width=True,
+                        help="MM Results 시트의 데이터를 CSV 파일로 다운로드합니다."
                     )
+                
+                # XLSX 다운로드 버튼 및 자동 저장
+                with col2:
+                    try:
+                        from io import BytesIO
+                        output = BytesIO()
+                        with pd.ExcelWriter(output, engine='openpyxl') as writer:
+                            results['mm_results_df'][available_cols].to_excel(writer, sheet_name='MM Results', index=False)
+                            results['interp_df'].to_excel(writer, sheet_name='Michaelis-Menten Curves', index=False)
+                        output.seek(0)
+                        xlsx_data = output.getvalue()
+                        
+                        # XLSX 파일 자동 저장 (Analysis 모드에서 자동 로드용)
+                        try:
+                            with open('Michaelis-Menten_calibration_results.xlsx', 'wb') as f:
+                                f.write(xlsx_data)
+                        except Exception as save_err:
+                            st.sidebar.warning(f"⚠️ XLSX 파일 자동 저장 실패: {save_err}")
+                        
+                        st.download_button(
+                            label="📥 전체 결과 다운로드 (XLSX)",
+                            data=xlsx_data,
+                            file_name="Michaelis-Menten_calibration_results.xlsx",
+                            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                            use_container_width=True,
+                            help="MM Results와 Michaelis-Menten Curves 시트를 포함한 전체 엑셀 파일입니다."
+                        )
+                    except Exception as e:
+                        st.warning(f"XLSX 다운로드 준비 중 오류: {e}")
     
     else:  # 이미지 파일 업로드
         st.sidebar.subheader("📁 이미지 파일 업로드")
@@ -676,23 +853,20 @@ def data_load_mode(st):
                             progress_bar.progress((idx + 0.5) / len(curves_data))
                             
                             if graph_type == "선/점선 그래프":
-                                # 선 데이터: Exponential Association 모델로 fitting
-                                params, fit_values, r_sq = fit_time_course(times, values, model='exponential')
+                                # 선 데이터: 초기 속도 계산 (선형 구간 분석)
+                                params, fit_values, r_sq = fit_time_course(times, values, model='linear')
                                 
+                                v0 = params['v0']
                                 F0 = params['F0']
                                 Fmax = params['Fmax']
-                                k = params['k']
-                                Vmax = params['Vmax']
-                                Km = params['Km']
                                 
                                 mm_results[conc_name] = {
                                     'concentration': conc_value,
+                                    'v0': v0,
                                     'F0': F0,
                                     'Fmax': Fmax,
-                                    'k': k,
-                                    'Vmax': Vmax,
-                                    'Km': Km,
-                                    'R_squared': r_sq
+                                    'R_squared': r_sq,
+                                    'linear_fraction': params['linear_fraction']
                                 }
                                 
                                 # Interpolation 범위 계산 (개별 곡선)
@@ -704,28 +878,30 @@ def data_load_mode(st):
                                 n_points = 1000
                                 x_interp = np.linspace(x_range_min_curve, x_range_max_curve, n_points + 1)
                                 
-                                # Exponential Association 모델로 계산
-                                y_interp = exponential_association(x_interp, F0, Fmax, k)
+                                # 선형 피팅으로 계산 (선형 구간만)
+                                linear_times = times[~np.isnan(fit_values)]
+                                linear_values = values[~np.isnan(fit_values)]
+                                if len(linear_times) >= 2:
+                                    coeffs = np.polyfit(linear_times, linear_values, 1)
+                                    y_interp = np.polyval(coeffs, x_interp)
+                                else:
+                                    y_interp = np.full_like(x_interp, F0)
                                 
                             else:
-                                # 점 데이터: Prism 스타일 interpolation
-                                # 먼저 exponential association으로 fitting
-                                params, fit_values, r_sq = fit_time_course(times, values, model='exponential')
+                                # 점 데이터: 초기 속도 계산 (선형 구간 분석)
+                                params, fit_values, r_sq = fit_time_course(times, values, model='linear')
                                 
+                                v0 = params['v0']
                                 F0 = params['F0']
                                 Fmax = params['Fmax']
-                                k = params['k']
-                                Vmax = params['Vmax']
-                                Km = params['Km']
                                 
                                 mm_results[conc_name] = {
                                     'concentration': conc_value,
+                                    'v0': v0,
                                     'F0': F0,
                                     'Fmax': Fmax,
-                                    'k': k,
-                                    'Vmax': Vmax,
-                                    'Km': Km,
-                                    'R_squared': r_sq
+                                    'R_squared': r_sq,
+                                    'linear_fraction': params['linear_fraction']
                                 }
                                 
                                 # Interpolation 범위 계산 (개별 곡선)
@@ -737,8 +913,14 @@ def data_load_mode(st):
                                 n_points = 1000
                                 x_interp = np.linspace(x_range_min_curve, x_range_max_curve, n_points + 1)
                                 
-                                # Exponential Association 모델로 interpolation
-                                y_interp = exponential_association(x_interp, F0, Fmax, k)
+                                # 선형 피팅으로 interpolation (선형 구간만)
+                                linear_times = times[~np.isnan(fit_values)]
+                                linear_values = values[~np.isnan(fit_values)]
+                                if len(linear_times) >= 2:
+                                    coeffs = np.polyfit(linear_times, linear_values, 1)
+                                    y_interp = np.polyval(coeffs, x_interp)
+                                else:
+                                    y_interp = np.full_like(x_interp, F0)
                             
                             # Interpolated 데이터 저장
                             for x, y in zip(x_interp, y_interp):
@@ -757,19 +939,18 @@ def data_load_mode(st):
                         
                         interp_df = pd.DataFrame(all_interp_data)
                         
-                        # MM Results 저장
+                        # 초기 속도 Results 저장
                         results_data = []
                         for conc_name, params in sorted(mm_results.items(), key=lambda x: x[1]['concentration']):
-                            eq = f"F(t) = {params['F0']:.2f} + ({params['Fmax'] - params['F0']:.2f}) * [1 - exp(-{params['k']:.4f}*t)]"
+                            eq = f"v0 = {params['v0']:.2f} (선형 구간 기울기)"
                             results_data.append({
                                 'Concentration': conc_name,
                                 'Concentration [ug/mL]': params['concentration'],
+                                'v0': params['v0'],
                                 'F0': params['F0'],
                                 'Fmax': params['Fmax'],
-                                'k': params['k'],
-                                'Vmax': params['Vmax'],
-                                'Km': params['Km'],
                                 'R_squared': params['R_squared'],
+                                'linear_fraction': params['linear_fraction'],
                                 'Equation': eq
                             })
                         
@@ -863,46 +1044,54 @@ def data_load_mode(st):
                         st.subheader("상세 파라미터")
                         
                         # 상세 파라미터 테이블
-                        detail_cols = ['Concentration [ug/mL]', 'F0', 'Fmax', 'k', 'Vmax', 'Km', 'R_squared', 'Equation']
+                        detail_cols = ['Concentration [ug/mL]', 'v0', 'F0', 'Fmax', 'R_squared', 'linear_fraction', 'Equation']
                         available_cols = [col for col in detail_cols if col in results['mm_results_df'].columns]
                         st.dataframe(results['mm_results_df'][available_cols], use_container_width=True, hide_index=True)
                         
-                        # XLSX 다운로드 버튼 및 자동 저장
+                        # 파일 다운로드 버튼
                         st.markdown("---")
-                        try:
-                            from io import BytesIO
-                            output = BytesIO()
-                            with pd.ExcelWriter(output, engine='openpyxl') as writer:
-                                results['mm_results_df'][available_cols].to_excel(writer, sheet_name='MM Results', index=False)
-                                results['interp_df'].to_excel(writer, sheet_name='Michaelis-Menten Curves', index=False)
-                            output.seek(0)
-                            xlsx_data = output.getvalue()
-                            
-                            # XLSX 파일 자동 저장 (Analysis 모드에서 자동 로드용)
-                            try:
-                                with open('Michaelis-Menten_calibration_results.xlsx', 'wb') as f:
-                                    f.write(xlsx_data)
-                            except Exception as save_err:
-                                st.sidebar.warning(f"⚠️ XLSX 파일 자동 저장 실패: {save_err}")
-                            
+                        col1, col2 = st.columns(2)
+                        
+                        # MM Results CSV 다운로드
+                        with col1:
+                            mm_results_csv = results['mm_results_df'][available_cols].to_csv(index=False)
                             st.download_button(
-                                label="📥 결과 다운로드 (XLSX)",
-                                data=xlsx_data,
-                                file_name="Michaelis-Menten_calibration_results.xlsx",
-                                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                                use_container_width=True
-                            )
-                        except Exception as e:
-                            st.warning(f"XLSX 다운로드 준비 중 오류: {e}")
-                            # CSV로 대체
-                            csv_results = results['mm_results_df'][available_cols].to_csv(index=False)
-                            st.download_button(
-                                label="📥 결과 다운로드 (CSV)",
-                                data=csv_results,
-                                file_name="MM_results.csv",
+                                label="📥 MM Results 다운로드 (CSV)",
+                                data=mm_results_csv,
+                                file_name="MM_Results.csv",
                                 mime="text/csv",
-                                use_container_width=True
+                                use_container_width=True,
+                                help="MM Results 시트의 데이터를 CSV 파일로 다운로드합니다."
                             )
+                        
+                        # XLSX 다운로드 버튼 및 자동 저장
+                        with col2:
+                            try:
+                                from io import BytesIO
+                                output = BytesIO()
+                                with pd.ExcelWriter(output, engine='openpyxl') as writer:
+                                    results['mm_results_df'][available_cols].to_excel(writer, sheet_name='MM Results', index=False)
+                                    results['interp_df'].to_excel(writer, sheet_name='Michaelis-Menten Curves', index=False)
+                                output.seek(0)
+                                xlsx_data = output.getvalue()
+                                
+                                # XLSX 파일 자동 저장 (Analysis 모드에서 자동 로드용)
+                                try:
+                                    with open('Michaelis-Menten_calibration_results.xlsx', 'wb') as f:
+                                        f.write(xlsx_data)
+                                except Exception as save_err:
+                                    st.sidebar.warning(f"⚠️ XLSX 파일 자동 저장 실패: {save_err}")
+                                
+                                st.download_button(
+                                    label="📥 전체 결과 다운로드 (XLSX)",
+                                    data=xlsx_data,
+                                    file_name="Michaelis-Menten_calibration_results.xlsx",
+                                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                                    use_container_width=True,
+                                    help="MM Results와 Michaelis-Menten Curves 시트를 포함한 전체 엑셀 파일입니다."
+                                )
+                            except Exception as e:
+                                st.warning(f"XLSX 다운로드 준비 중 오류: {e}")
         else:
             st.info("👈 이미지 파일을 업로드해주세요.")
 

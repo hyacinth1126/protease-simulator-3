@@ -122,177 +122,108 @@ def read_raw_data(filename='mode_prep_raw_data/raw.csv'):
     return data
 
 
-def exponential_association(t, F0, Fmax, k):
+def calculate_initial_velocity(times, values, linear_fraction=0.2, min_points=3):
     """
-    Exponential Association 모델
-    F(t) = F0 + (Fmax - F0) * [1 - exp(-k*t)]
-    """
-    return F0 + (Fmax - F0) * (1 - np.exp(-k * t))
-
-
-def michaelis_menten_kinetic(t, Vmax, Km, F0):
-    """
-    Michaelis-Menten Kinetic 모델 (시간 도메인) - Prism 방식
-    GraphPad Prism에서 사용하는 방식:
-    F(t) = F0 + (Vmax * t) / (Km + t)
+    Quenched peptide protease kinetics: 초기 속도 계산
     
-    또는 더 정확한 형태:
-    F(t) = F0 + Vmax * t / (1 + Km / t)  (t > 0일 때)
-    """
-    t = np.array(t)
-    # Prism 방식: F(t) = F0 + Vmax * t / (Km + t)
-    # t=0일 때 F0가 되도록
-    result = np.zeros_like(t, dtype=float)
-    mask = t > 0
-    result[mask] = F0 + (Vmax * t[mask]) / (Km + t[mask])
-    result[~mask] = F0
-    return result
-
-
-def michaelis_menten_time_course(t, Vmax, Km, F0):
-    """
-    Prism 스타일 Michaelis-Menten 시간 경과 모델
-    F(t) = F0 + (Vmax * t) / (Km + t)
-    
-    이 모델은 Prism의 "Michaelis-Menten" 방정식과 동일합니다.
-    """
-    t = np.array(t)
-    result = np.zeros_like(t, dtype=float)
-    mask = t > 0
-    result[mask] = F0 + (Vmax * t[mask]) / (Km + t[mask])
-    result[~mask] = F0
-    return result
-
-
-def fit_time_course(times, values, model='exponential'):
-    """
-    시간 경과 곡선에 모델 피팅
+    시간-형광 그래프에서 선형 구간의 기울기를 계산하여 초기 속도(v0)를 구합니다.
     
     Parameters:
-    - times: 시간 배열
+    - times: 시간 배열 (분 또는 초)
     - values: 형광값 배열
-    - model: 'exponential' 또는 'mm_kinetic'
+    - linear_fraction: 선형 구간으로 사용할 초기 데이터 비율 (기본값: 0.2 = 처음 20%)
+    - min_points: 최소 데이터 포인트 수
     
     Returns:
-    - params: 피팅 파라미터 딕셔너리
-    - fit_values: 피팅된 값
-    - r_squared: 결정계수
+    - v0: 초기 속도 (형광 단위/시간 단위)
+    - F0: 초기 형광값 (y절편)
+    - r_squared: 선형 피팅의 R²
+    - linear_times: 선형 구간 시간 배열
+    - linear_values: 선형 구간 형광값 배열
     """
     times = np.array(times)
     values = np.array(values)
     
-    # 초기값 추정
-    F0_init = values[0] if len(values) > 0 else 0
-    Fmax_init = np.max(values)
-    k_init = 0.1  # 초기 추정
+    # 정렬 (시간 순서대로)
+    sort_idx = np.argsort(times)
+    times = times[sort_idx]
+    values = values[sort_idx]
     
-    if model == 'exponential':
-        # Prism 방식: Michaelis-Menten 모델을 직접 fitting
-        # GraphPad Prism: Y = Vmax*X/(Km + X)
-        # 시간-형광값 데이터에 적용: F(t) = F0 + (Vmax * t) / (Km + t)
-        try:
-            # 초기값 추정 (Prism과 유사한 방식)
-            # Prism은 t→∞일 때 F(t) → F0 + Vmax이므로
-            # Vmax ≈ 최종값 - F0
-            Vmax_init = Fmax_init - F0_init
-            
-            # 더 정확한 Vmax 추정: 여러 포인트를 사용
-            if len(times) > 2:
-                # 중간~후반부 데이터로부터 Vmax 추정
-                # t가 충분히 클 때: F(t) ≈ F0 + Vmax
-                late_values = values[times > times[-1] * 0.5] if len(times) > 3 else values[-3:]
-                if len(late_values) > 0:
-                    avg_late = np.mean(late_values)
-                    Vmax_init = max(Vmax_init, avg_late - F0_init)
-            
-            # Km 초기값: Prism 결과를 보면 보통 작은 값 (0.1~0.3 정도)
-            # 초기 기울기로부터 추정
-            if len(times) > 1 and times[1] > times[0]:
-                early_slope = (values[1] - values[0]) / (times[1] - times[0])
-                if early_slope > 0 and Vmax_init > 0:
-                    # 초기 기울기 = Vmax / Km (t→0일 때)
-                    # 따라서 Km = Vmax / early_slope
-                    Km_init = Vmax_init / early_slope
-                    # Prism 결과 범위로 제한 (0.01 ~ 1.0)
-                    Km_init = max(0.01, min(1.0, Km_init))
-                else:
-                    Km_init = 0.1
-            else:
-                Km_init = 0.1
-            
-            # Prism 방식: Michaelis-Menten 직접 fitting
-            # Prism은 Km > 0 제약을 사용
-            # bounds가 있으면 'trf' 방법 사용 (Trust Region Reflective)
-            popt, pcov = curve_fit(
-                michaelis_menten_time_course, times, values,
-                p0=[Vmax_init, Km_init, F0_init],
-                bounds=([0, 0.01, -1000], [np.inf, np.inf, Fmax_init * 2]),
-                maxfev=10000,  # Prism과 유사한 정확도
-                method='trf'  # Trust Region Reflective (bounds 지원)
-            )
-            Vmax, Km, F0 = popt
-            
-            # Exponential Association 파라미터로 변환 (호환성 유지)
-            # Fmax는 t→∞일 때의 값: Fmax = F0 + Vmax
-            Fmax = F0 + Vmax
-            # k는 초기 속도로부터 추정
-            # 초기 기울기 = Vmax / Km (t→0일 때)
-            # Exponential Association 초기 기울기 = k * (Fmax - F0)
-            # 따라서 k = (Vmax / Km) / (Fmax - F0) = Vmax / (Km * Vmax) = 1 / Km
-            k = 1.0 / Km if Km > 0 else 0.1
-            
-            fit_values = michaelis_menten_time_course(times, Vmax, Km, F0)
-            
-        except Exception as e:
-            print(f"   ⚠️ Prism MM 피팅 실패, Exponential Association으로 대체: {e}")
-            # 실패 시 Exponential Association으로 fallback
-            try:
-                popt, pcov = curve_fit(
-                    exponential_association, times, values,
-                    p0=[F0_init, Fmax_init, k_init],
-                    bounds=([-1000, F0_init, 0.001], [Fmax_init, Fmax_init * 3, 10]),
-                    maxfev=5000
-                )
-                F0, Fmax, k = popt
-                Vmax = k * (Fmax - F0)
-                Km = (Fmax - F0) / 2
-                fit_values = exponential_association(times, F0, Fmax, k)
-            except:
-                F0, Fmax, k = F0_init, Fmax_init, k_init
-                Vmax = k * (Fmax - F0)
-                Km = (Fmax - F0) / 2
-                fit_values = values
+    # 선형 구간 결정: 초기 데이터의 linear_fraction만큼 사용
+    n_total = len(times)
+    n_linear = max(min_points, int(n_total * linear_fraction))
     
-    else:  # mm_kinetic
-        try:
-            popt, pcov = curve_fit(
-                michaelis_menten_kinetic, times, values,
-                p0=[(Fmax_init - F0_init) / times[-1], 1.0, F0_init],
-                bounds=([0, 0.01, 0], [np.inf, 100, F0_init * 2]),
-                maxfev=5000
-            )
-            Vmax, Km, F0 = popt
-            Fmax = np.max(values)
-            k = Vmax / (Fmax - F0) if (Fmax - F0) > 0 else 0.1
-            fit_values = michaelis_menten_kinetic(times, Vmax, Km, F0)
-        except:
-            F0, Fmax, k = F0_init, Fmax_init, k_init
-            Vmax = k * (Fmax - F0)
-            Km = (Fmax - F0) / 2
-            fit_values = values
+    # 최소한 min_points 이상이어야 함
+    if n_linear < min_points or n_total < min_points:
+        # 데이터가 부족하면 가능한 만큼 사용
+        n_linear = min(min_points, n_total)
     
-    # R² 계산
-    ss_res = np.sum((values - fit_values) ** 2)
-    ss_tot = np.sum((values - np.mean(values)) ** 2)
-    r_squared = 1 - (ss_res / ss_tot) if ss_tot > 0 else 0
+    linear_times = times[:n_linear]
+    linear_values = values[:n_linear]
+    
+    # 선형 피팅: F(t) = F0 + v0 * t
+    if len(linear_times) >= 2 and np.ptp(linear_times) > 0:
+        coeffs = np.polyfit(linear_times, linear_values, 1)
+        v0 = coeffs[0]  # 기울기 = 초기 속도
+        F0 = coeffs[1]  # y절편 = 초기 형광값
+        
+        # R² 계산
+        fit_values = np.polyval(coeffs, linear_times)
+        ss_res = np.sum((linear_values - fit_values) ** 2)
+        ss_tot = np.sum((linear_values - np.mean(linear_values)) ** 2)
+        r_squared = 1 - (ss_res / ss_tot) if ss_tot > 0 else 0
+    else:
+        # 데이터 부족 시 단순 계산
+        if len(linear_times) >= 2:
+            v0 = (linear_values[-1] - linear_values[0]) / (linear_times[-1] - linear_times[0])
+        else:
+            v0 = 0
+        F0 = values[0] if len(values) > 0 else 0
+        r_squared = 0
+    
+    return v0, F0, r_squared, linear_times, linear_values
+
+
+def fit_time_course(times, values, model='linear'):
+    """
+    Quenched peptide protease kinetics: 초기 속도 계산
+    
+    시간-형광 그래프에서 선형 구간의 기울기를 계산합니다.
+    MM 방정식은 시간-형광 데이터에 직접 적용하지 않습니다.
+    
+    Parameters:
+    - times: 시간 배열
+    - values: 형광값 배열
+    - model: 'linear' (선형 구간 분석만 수행)
+    
+    Returns:
+    - params: 피팅 파라미터 딕셔너리 (v0, F0 포함)
+    - fit_values: 선형 피팅된 값 (선형 구간만)
+    - r_squared: 선형 피팅의 R²
+    """
+    # 초기 속도 계산 (선형 구간 분석)
+    v0, F0, r_squared, linear_times, linear_values = calculate_initial_velocity(times, values)
+    
+    # 선형 피팅 값 생성 (선형 구간에 대해서만)
+    if len(linear_times) >= 2:
+        coeffs = np.polyfit(linear_times, linear_values, 1)
+        fit_values_linear = np.polyval(coeffs, linear_times)
+    else:
+        fit_values_linear = linear_values
+    
+    # 전체 시간에 대한 피팅 값 (선형 구간만 표시용)
+    fit_values = np.full_like(times, np.nan)
+    fit_values[:len(linear_times)] = fit_values_linear
+    
+    # Fmax는 전체 데이터의 최대값
+    Fmax = np.max(values) if len(values) > 0 else F0
     
     params = {
-        'F0': F0,
-        'Fmax': Fmax,
-        'k': k,
-        'Vmax': Vmax,
-        'Km': Km,
-        'R_squared': r_squared
+        'v0': v0,  # 초기 속도 (형광 단위/시간 단위)
+        'F0': F0,  # 초기 형광값
+        'Fmax': Fmax,  # 최대 형광값
+        'R_squared': r_squared,  # 선형 피팅의 R²
+        'linear_fraction': len(linear_times) / len(times) if len(times) > 0 else 0
     }
     
     return params, fit_values, r_squared
@@ -394,37 +325,37 @@ def main():
         print(f"   ❌ 오류: {e}")
         return
     
-    # 2. 각 농도별 시간 경과 곡선 피팅
-    print("\n2️⃣ 각 농도별 시간 경과 곡선 피팅 ...")
+    # 2. 각 농도별 초기 속도 계산 (Quenched peptide protease kinetics)
+    print("\n2️⃣ 각 농도별 초기 속도(v0) 계산 중...")
+    print("   (시간-형광 그래프의 선형 구간에서 기울기 계산)")
     
-    mm_results = {}
+    v0_results = {}
     all_fit_data = []
     
     for conc_name, data in raw_data.items():
         times = data['time']
         values = data['value']
         
-        # Exponential Association 모델로 피팅
-        params, fit_values, r_sq = fit_time_course(times, values, model='exponential')
+        # 초기 속도 계산 (선형 구간 분석)
+        params, fit_values, r_sq = fit_time_course(times, values, model='linear')
         
-        # MM 파라미터 추출
-        Vmax = params['Vmax']
-        Km = params['Km']
-        F0 = params['F0']
-        Fmax = params['Fmax']
+        # 초기 속도 파라미터 추출
+        v0 = params['v0']  # 초기 속도 (형광 단위/시간 단위)
+        F0 = params['F0']  # 초기 형광값
+        Fmax = params['Fmax']  # 최대 형광값
         
-        mm_results[conc_name] = {
+        v0_results[conc_name] = {
             'concentration': data['concentration'],
-            'Vmax': Vmax,
-            'Km': Km,
+            'v0': v0,  # 초기 속도
             'F0': F0,
             'Fmax': Fmax,
-            'k': params['k'],
-            'R_squared': r_sq
+            'R_squared': r_sq,
+            'linear_fraction': params['linear_fraction']
         }
         
-        # Fit curve 데이터 저장
-        for t, val, fit_val in zip(times, values, fit_values):
+        # Fit curve 데이터 저장 (선형 구간만)
+        valid_mask = ~np.isnan(fit_values)
+        for t, val, fit_val in zip(times[valid_mask], values[valid_mask], fit_values[valid_mask]):
             all_fit_data.append({
                 'Concentration': conc_name,
                 'Concentration [ug/mL]': data['concentration'],
@@ -434,53 +365,44 @@ def main():
                 'Residual': val - fit_val
             })
         
-        print(f"   ✅ {conc_name}: Vmax={Vmax:.2f}, Km={Km:.4f}, R²={r_sq:.4f}")
+        print(f"   ✅ {conc_name}: v0={v0:.2f} (형광/시간), F0={F0:.2f}, Fmax={Fmax:.2f}, R²={r_sq:.4f}")
     
-    # 3. Michaelis-Menten Results CSV 저장
-    print("\n3️⃣ Michaelis-Menten Results CSV 생성 중...")
+    # 3. 초기 속도 결과 CSV 저장
+    print("\n3️⃣ 초기 속도 결과 CSV 생성 중...")
     
     results_data = []
-    for conc_name, params in sorted(mm_results.items(), key=lambda x: x[1]['concentration']):
+    for conc_name, params in sorted(v0_results.items(), key=lambda x: x[1]['concentration']):
         results_data.append({
             'Concentration [ug/mL]': params['concentration'],
-            'Vmax': params['Vmax'],
-            'Km': params['Km'],
+            'v0': params['v0'],  # 초기 속도
             'F0': params['F0'],
             'Fmax': params['Fmax'],
-            'k': params['k'],
-            'R_squared': params['R_squared']
+            'R_squared': params['R_squared'],
+            'linear_fraction': params['linear_fraction']
         })
     
     results_df = pd.DataFrame(results_data)
-    results_filename = 'prep_data/fitting_results/MM_results_generated.csv'
+    results_filename = 'prep_data/fitting_results/initial_velocity_results.csv'
     
-    with open(results_filename, 'w', newline='', encoding='utf-8-sig') as f:
-        f.write(',')
-        f.write(','.join(results_df['Concentration'].astype(str)) + '\n')
-        f.write('Michaelis-Menten,\n')
-        f.write('Best-fit values,\n')
-        f.write(f"Vmax,{','.join(results_df['Vmax'].astype(str).str[:10])}\n")
-        f.write(f"Km,{','.join(results_df['Km'].astype(str))}\n")
+    results_df.to_csv('prep_data/fitting_results/initial_velocity_detailed.csv', index=False)
+    print(f"   ✅ prep_data/fitting_results/initial_velocity_detailed.csv 저장 완료 (상세 데이터)")
     
-    results_df.to_csv('prep_data/fitting_results/MM_results_detailed.csv', index=False)
-    print(f"   ✅ {results_filename} 저장 완료")
-    print(f"   ✅ prep_data/fitting_results/MM_results_detailed.csv 저장 완료 (상세 데이터)")
+    # 4. Michaelis-Menten Calibration Curve 생성 (v0 vs [S])
+    print("\n4️⃣ Michaelis-Menten Calibration Curve 생성 중...")
+    print("   (초기 속도 v0 vs 농도 [S]에 MM 방정식 피팅)")
     
-    # 4. Calibration Curve 생성
-    print("\n4️⃣ Calibration Curve 생성 중...")
+    # 농도 vs 초기 속도(v0)로 calibration curve 피팅
+    concentrations = [v0_results[cn]['concentration'] for cn in sorted(v0_results.keys(), 
+                                                                      key=lambda x: v0_results[x]['concentration'])]
+    v0_values = [v0_results[cn]['v0'] for cn in sorted(v0_results.keys(), 
+                                                      key=lambda x: v0_results[x]['concentration'])]
     
-    # 농도 vs Vmax로 calibration curve 피팅
-    concentrations = [mm_results[cn]['concentration'] for cn in sorted(mm_results.keys(), 
-                                                                      key=lambda x: mm_results[x]['concentration'])]
-    vmax_values = [mm_results[cn]['Vmax'] for cn in sorted(mm_results.keys(), 
-                                                          key=lambda x: mm_results[x]['concentration'])]
-    
-    # MM calibration curve 피팅
-    cal_params, cal_fit_values, cal_equation = fit_calibration_curve(concentrations, vmax_values)
+    # MM calibration curve 피팅: v0 = Vmax * [S] / (Km + [S])
+    cal_params, cal_fit_values, cal_equation = fit_calibration_curve(concentrations, v0_values)
     
     print(f"   ✅ Calibration Equation: {cal_equation}")
-    print(f"      Vmax_cal = {cal_params['Vmax_cal']:.2f} ± {cal_params.get('Vmax_cal_std', 0):.2f}")
-    print(f"      Km_cal = {cal_params['Km_cal']:.4f} ± {cal_params.get('Km_cal_std', 0):.4f}")
+    print(f"      Vmax = {cal_params['Vmax_cal']:.2f} ± {cal_params.get('Vmax_cal_std', 0):.2f} (형광 단위/시간 단위)")
+    print(f"      Km = {cal_params['Km_cal']:.4f} ± {cal_params.get('Km_cal_std', 0):.4f} (μg/mL)")
     print(f"      R² = {cal_params['R_squared']:.4f}")
     
     # 5. Calibration Curve XY 데이터 생성
@@ -491,7 +413,7 @@ def main():
     conc_max = max(concentrations)
     conc_range = np.linspace(conc_min * 0.5, conc_max * 1.5, 200)
     
-    # Calibration curve 계산
+    # Calibration curve 계산: v0 = Vmax * [S] / (Km + [S])
     cal_y_values = michaelis_menten_calibration(conc_range, 
                                                 cal_params['Vmax_cal'], 
                                                 cal_params['Km_cal'])
@@ -501,7 +423,7 @@ def main():
     for x, y in zip(conc_range, cal_y_values):
         cal_curve_data.append({
             'Concentration_ug/mL': x,
-            'Vmax_Fitted': y,
+            'v0_Fitted': y,  # 초기 속도
             'Equation': cal_equation
         })
     
@@ -510,9 +432,9 @@ def main():
     cal_curve_df.to_csv(cal_curve_filename, index=False)
     print(f"   ✅ {cal_curve_filename} 저장 완료 ({len(cal_curve_df)} 행)")
     
-    # 6. Fit curves 데이터 저장
+    # 6. 선형 피팅 곡선 데이터 저장
     fit_curves_df = pd.DataFrame(all_fit_data)
-    fit_curves_filename = 'prep_data/fitting_results/MM_fit_curves.csv'
+    fit_curves_filename = 'prep_data/fitting_results/linear_fit_curves.csv'
     fit_curves_df.to_csv(fit_curves_filename, index=False)
     print(f"   ✅ {fit_curves_filename} 저장 완료 ({len(fit_curves_df)} 행)")
     
@@ -520,21 +442,22 @@ def main():
     print("\n6️⃣ 방정식 요약 저장 중...")
     
     equations_data = [{
-        'Type': 'Calibration Curve',
+        'Type': 'Calibration Curve (v0 vs [S])',
         'Equation': cal_equation,
         'Vmax': cal_params['Vmax_cal'],
         'Km': cal_params['Km_cal'],
         'R_squared': cal_params['R_squared']
     }]
     
-    # 각 농도별 시간 곡선 방정식
-    for conc_name, params in sorted(mm_results.items(), key=lambda x: x[1]['concentration']):
-        eq = f"F(t) = {params['F0']:.2f} + ({params['Fmax'] - params['F0']:.2f}) * [1 - exp(-{params['k']:.4f}*t)]"
+    # 각 농도별 초기 속도 정보
+    for conc_name, params in sorted(v0_results.items(), key=lambda x: x[1]['concentration']):
+        eq = f"v0 = {params['v0']:.2f} (선형 구간 기울기)"
         equations_data.append({
             'Type': f'{conc_name}',
             'Equation': eq,
-            'Vmax': params['Vmax'],
-            'Km': params['Km'],
+            'v0': params['v0'],
+            'F0': params['F0'],
+            'Fmax': params['Fmax'],
             'R_squared': params['R_squared']
         })
     
@@ -543,40 +466,34 @@ def main():
     equations_df.to_csv(equations_filename, index=False)
     print(f"   ✅ {equations_filename} 저장 완료")
     
-    # MM_calibration_equations.csv 형식으로 저장 (사용자 요청 형식)
+    # MM_calibration_equations.csv 형식으로 저장
     calibration_equations_data = []
-    for conc_name, params in sorted(mm_results.items(), key=lambda x: x[1]['concentration']):
-        # F0가 거의 0이면 단순화된 형식 사용
-        if abs(params['F0']) < 0.01:
-            eq_str = f"F(t) = 0.00 + ({params['Fmax']:.2f}) * [1 - exp(-{params['k']:.4f}*t)]"
-        else:
-            eq_str = f"F(t) = {params['F0']:.2f} + ({params['Fmax']:.2f}) * [1 - exp(-{params['k']:.4f}*t)]"
-        
+    for conc_name, params in sorted(v0_results.items(), key=lambda x: x[1]['concentration']):
         calibration_equations_data.append({
             'Concentration': conc_name,
+            'Concentration_ug/mL': params['concentration'],
+            'v0': params['v0'],  # 초기 속도
             'F0': params['F0'],
             'Fmax': params['Fmax'],
-            'Vmax': params['Vmax'],
-            'Km': params['Km'],
-            'k_rate': params['k'],
-            'Equation': eq_str
+            'R_squared': params['R_squared'],
+            'linear_fraction': params['linear_fraction']
         })
     
     calibration_equations_df = pd.DataFrame(calibration_equations_data)
     calibration_equations_filename = 'prep_data/fitting_results/MM_calibration_equations.csv'
     calibration_equations_df.to_csv(calibration_equations_filename, index=False)
-    print(f"   ✅ {calibration_equations_filename} 저장 완료 (농도별 상세 방정식)")
+    print(f"   ✅ {calibration_equations_filename} 저장 완료 (농도별 초기 속도 데이터)")
     
     # 최종 요약
     print("\n" + "=" * 70)
     print("📋 생성된 파일:")
-    print(f"   1. {results_filename} - Michaelis-Menten Fitting 결과")
-    print(f"   2. prep_data/fitting_results/MM_results_detailed.csv - 상세 MM 파라미터")
-    print(f"   3. {cal_curve_filename} - Calibration curve XY 데이터 (그래프용)")
-    print(f"   4. prep_data/fitting_results/MM_calibration_curve.png - Calibration curve 그래프 (PNG)")
-    print(f"   5. {fit_curves_filename} - 각 농도별 시간 곡선 fit 데이터")
-    print(f"   6. {equations_filename} - 모든 방정식 요약")
-    print("\n📊 Calibration Curve:")
+    print(f"   1. prep_data/fitting_results/initial_velocity_detailed.csv - 초기 속도 상세 데이터")
+    print(f"   2. {cal_curve_filename} - Calibration curve XY 데이터 (그래프용)")
+    print(f"   3. prep_data/fitting_results/MM_calibration_curve.png - Calibration curve 그래프 (PNG)")
+    print(f"   4. {fit_curves_filename} - 각 농도별 선형 피팅 데이터")
+    print(f"   5. {equations_filename} - 모든 방정식 요약")
+    print(f"   6. {calibration_equations_filename} - 농도별 초기 속도 데이터")
+    print("\n📊 Michaelis-Menten Calibration Curve (v0 vs [S]):")
     print(f"   {cal_equation}")
     print(f"   농도 범위: {conc_min:.4f} - {conc_max:.4f} (확장: {conc_min*0.5:.4f} - {conc_max*1.5:.4f})")
     # 7. Calibration Curve 그래프 생성
@@ -592,46 +509,48 @@ def main():
 def plot_calibration_curve(cal_curve_df, results_df, cal_params, cal_equation):
     """
     Calibration curve 그래프를 그리고 PNG로 저장
+    (v0 vs [S]에 MM 방정식 피팅)
     """
     fig, ax = plt.subplots(figsize=(10, 7))
     
     # Calibration curve 그리기
     ax.plot(
         cal_curve_df['Concentration_ug/mL'],
-        cal_curve_df['Vmax_Fitted'],
+        cal_curve_df['v0_Fitted'],
         'b-', linewidth=2.5,
         label=f'MM Fit: {cal_equation}',
         zorder=1
     )
     
-    # 실험 데이터 포인트 그리기
+    # 실험 데이터 포인트 그리기 (v0 vs [S])
     concentrations = results_df['Concentration [ug/mL]'].values
-    vmax_values = results_df['Vmax'].values
+    v0_values = results_df['v0'].values
     
     ax.scatter(
         concentrations,
-        vmax_values,
+        v0_values,
         color='red',
         s=150,
         marker='o',
         edgecolors='black',
         linewidths=2,
-        label='Experimental Data',
+        label='Experimental Data (v₀)',
         zorder=2
     )
     
     # 그래프 스타일
-    ax.set_xlabel('Concentration (μg/mL)', fontsize=14, fontweight='bold')
-    ax.set_ylabel('Vmax (Fluorescence Units)', fontsize=14, fontweight='bold')
-    ax.set_title('Michaelis-Menten Calibration Curve', fontsize=16, fontweight='bold', pad=20)
+    ax.set_xlabel('Concentration [S] (μg/mL)', fontsize=14, fontweight='bold')
+    ax.set_ylabel('Initial Velocity v₀ (Fluorescence Units / Time)', fontsize=14, fontweight='bold')
+    ax.set_title('Michaelis-Menten Calibration Curve\n(Initial Velocity v₀ vs Substrate Concentration)', 
+                 fontsize=16, fontweight='bold', pad=20)
     
     # 그리드 추가
     ax.grid(True, alpha=0.3, linestyle='--')
     ax.legend(fontsize=12, loc='lower right', framealpha=0.9)
     
     # 통계 정보 텍스트 박스
-    stats_text = f"Vmax_cal = {cal_params['Vmax_cal']:.2f}\n"
-    stats_text += f"Km_cal = {cal_params['Km_cal']:.4f}\n"
+    stats_text = f"Vmax = {cal_params['Vmax_cal']:.2f}\n"
+    stats_text += f"Km = {cal_params['Km_cal']:.4f} μg/mL\n"
     stats_text += f"R² = {cal_params['R_squared']:.4f}"
     
     ax.text(0.05, 0.95, stats_text,

@@ -968,18 +968,49 @@ def data_load_mode(st):
             elif 'mm_fit_results' in results:
                 st.warning("⚠️ MM 피팅 실패 또는 데이터 부족")
             
-            # 탭 구성 (실험 타입에 따라 다름)
+            # 탭 구성 (st.tabs 대신 st.radio를 사용하여 상태 제어)
             exp_type = results.get('mm_fit_results', {}).get('experiment_type', 'Substrate 농도 변화 (표준 MM)')
             
+            tab_titles = []
             if exp_type == "Substrate 농도 변화 (표준 MM)":
-                tabs = ["📊 실험결과", "🔄 정규화", "📊 v₀ vs [S] MM Fit", "📋 Data Table"]
+                tab_titles = ["📊 실험결과", "🔄 정규화", "📊 v₀ vs [S] MM Fit", "📋 Data Table"]
             else:
-                tabs = ["📊 실험결과", "🔄 정규화", "📊 v₀ vs [E] Linear Fit", "📋 Data Table"]
+                tab_titles = ["📊 실험결과", "🔄 정규화", "📊 v₀ vs [E] Linear Fit", "📋 Data Table"]
             
-            tab_objects = st.tabs(tabs)
+            # 탭 상태 초기화
+            if 'current_data_load_tab' not in st.session_state:
+                st.session_state['current_data_load_tab'] = tab_titles[0]
+            
+            # 탭 메뉴 (라디오 버튼으로 구현하여 상태 제어)
+            # 위쪽 여백 추가 (margin-top: 24px)
+            st.markdown(
+                """
+                <style>
+                div[data-testid="stRadio"] {
+                    margin-top: 24px;
+                }
+                </style>
+                """,
+                unsafe_allow_html=True
+            )
+            
+            st.markdown("---")
+
+            selected_tab = st.radio(
+                "Tabs",
+                tab_titles,
+                index=tab_titles.index(st.session_state.get('current_data_load_tab', tab_titles[0])) if st.session_state.get('current_data_load_tab') in tab_titles else 0,
+                horizontal=True,
+                label_visibility="collapsed",
+                key="data_load_tab_radio"
+            )
+            
+            # 선택된 탭 상태 업데이트
+            st.session_state['current_data_load_tab'] = selected_tab
             
             # Tab 1: 실험결과 (점만 표시)
-            with tab_objects[0]:
+            if selected_tab == tab_titles[0]:
+                # with tab_objects[0]: 대신 직접 렌더링
                 st.subheader("실험결과")
                 
                 fig = go.Figure()
@@ -1074,7 +1105,7 @@ def data_load_mode(st):
             
             # Tab 2: 정규화
             norm_tab_idx = 1
-            with tab_objects[norm_tab_idx]:
+            if selected_tab == tab_titles[norm_tab_idx]:
                 st.subheader("🔄 정규화 결과")
                 
                 if 'normalization_results' in results and results['normalization_results']:
@@ -1099,28 +1130,29 @@ def data_load_mode(st):
                         if 'normalization_selected_conc_idx' not in st.session_state:
                             st.session_state['normalization_selected_conc_idx'] = 0
                         
-                        # 실험 타입에 따라 단위 변환 함수
-                        def format_conc_name(i):
+                        # 실험 타입에 따라 단위 변환 로직
+                        exp_type = results.get('mm_fit_results', {}).get('experiment_type', 'Substrate 농도 변화 (표준 MM)')
+                        
+                        # 미리 포맷팅된 옵션 리스트 생성
+                        formatted_options = []
+                        for i in range(len(conc_order)):
                             conc_name = conc_order[i]
                             conc_value = norm_results[conc_name]['concentration']
-                            # 실험 타입에 따라 단위 결정
-                            exp_type = results.get('mm_fit_results', {}).get('experiment_type', 'Substrate 농도 변화 (표준 MM)')
                             if exp_type == "Substrate 농도 변화 (표준 MM)":
-                                return f"{conc_value} μM"
-                            else:  # Enzyme 농도 변화
-                                return f"{conc_value} μg/mL"
+                                formatted_options.append(f"{conc_value} μM")
+                            else:
+                                formatted_options.append(f"{conc_value} μg/mL")
                         
-                        conc_idx = st.selectbox(
+                        # Selectbox 생성
+                        selected_option = st.selectbox(
                             "농도 선택",
-                            range(len(conc_order)),
-                            index=st.session_state['normalization_selected_conc_idx'],
-                            format_func=format_conc_name,
-                            key="normalization_tab_conc_select"
+                            formatted_options,
+                            index=0,
+                            key="normalization_conc_select_box"
                         )
                         
-                        # 선택된 인덱스를 session_state에 저장
-                        st.session_state['normalization_selected_conc_idx'] = conc_idx
-                        
+                        # 선택된 옵션에 해당하는 농도 이름 찾기
+                        conc_idx = formatted_options.index(selected_option)
                         selected_conc = conc_order[conc_idx]
                         norm_data = norm_results[selected_conc]
                         
@@ -1271,7 +1303,7 @@ def data_load_mode(st):
             
             # Tab 2: v₀ vs 농도 그래프 (실험 조건에 따라 다름)
             v0_tab_idx = 2 if exp_type == "Substrate 농도 변화 (표준 MM)" else 2
-            with tab_objects[v0_tab_idx]:
+            if selected_tab == tab_titles[v0_tab_idx]:
                 if 'v0_vs_concentration' in results and 'mm_fit_results' in results:
                     v0_data = results['v0_vs_concentration']
                     mm_fit = results['mm_fit_results']
@@ -1385,7 +1417,7 @@ def data_load_mode(st):
             
             # 마지막 탭: 데이터 테이블
             data_tab_idx = 3 if exp_type == "Substrate 농도 변화 (표준 MM)" else 3
-            with tab_objects[data_tab_idx]:
+            if selected_tab == tab_titles[data_tab_idx]:
                 st.subheader("상세 파라미터")
                 
                 # 상세 파라미터 테이블

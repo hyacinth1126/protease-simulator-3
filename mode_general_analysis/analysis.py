@@ -312,10 +312,24 @@ class DataNormalizer:
             conc_value = g_sorted[self.conc_col].iloc[0]
             
             # Check if fitted parameters are available
-            if fitted_params is not None and conc_value in fitted_params:
+            # 농도 매칭 (부동소수점 오차 고려)
+            matched_conc = None
+            if fitted_params is not None:
+                # 정확한 매칭 시도
+                if conc_value in fitted_params:
+                    matched_conc = conc_value
+                else:
+                    # 부동소수점 오차 고려한 매칭
+                    conc_float = float(conc_value)
+                    for fitted_conc in fitted_params.keys():
+                        if abs(conc_float - float(fitted_conc)) < 0.001:
+                            matched_conc = fitted_conc
+                            break
+            
+            if matched_conc is not None:
                 # Use fitted parameters from Data Load mode (preferred)
-                F0 = float(fitted_params[conc_value]['F0'])
-                Fmax = float(fitted_params[conc_value]['Fmax'])
+                F0 = float(fitted_params[matched_conc]['F0'])
+                Fmax = float(fitted_params[matched_conc]['Fmax'])
                 region_used = 'fitted_from_data_load'
             else:
                 # F0: same as temporary (minimum)

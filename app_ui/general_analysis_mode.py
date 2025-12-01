@@ -58,7 +58,7 @@ def general_analysis_mode(st):
     
     substrate_name = st.sidebar.text_input(
         "기질 이름 (선택사항)",
-        value="Dabcyl-HEK-K(FITC)-C",
+        value="Dabcyl-HEK-K(FITC)",
         placeholder="substrate",
         help="그래프 범례에 표시될 기질 이름 (비워두면 'substrate' 표시)"
     )
@@ -243,16 +243,16 @@ def general_analysis_mode(st):
             # rfu_col이 없으면 기본값 사용
             st.session_state['rfu_col'] = 'RFU_Interpolated'
     
-    # MM Results 시트에서 F0, Fmax 직접 읽기
+    # 우선순위: 1) normalization_results의 exponential 식 값, 2) interpolated 값의 최소/최대값
     fitted_params = None
     xlsx_path_for_mm_results = None
     
-    # 0순위: Session State 확인 (Data Load 모드에서 방금 실행된 경우)
+    # 0순위: Session State의 normalization_results 확인 (Data Load 모드의 exponential 식에서 나온 F0, Fmax)
     if 'interpolation_results' in st.session_state and st.session_state.get('mm_data_ready', False):
         try:
             results = st.session_state['interpolation_results']
             
-            # Normalization results에서 가져오기 (가장 정확함)
+            # Normalization results에서 가져오기 (가장 정확함 - exponential 식에서 나온 값)
             if 'normalization_results' in results:
                 fitted_params = {}
                 norm_results = results['normalization_results']
@@ -283,12 +283,33 @@ def general_analysis_mode(st):
             
             if fitted_params and len(fitted_params) > 0:
                 st.session_state['fitted_params'] = fitted_params
-                st.sidebar.success(f"✅ 메모리에서 F0, Fmax 파라미터 적용됨 ({len(fitted_params)}개 농도)")
+                st.sidebar.success(f"✅ Exponential 식에서 F0, Fmax 파라미터 적용됨 ({len(fitted_params)}개 농도)")
         except Exception as e:
             pass
 
-    # 메모리 로드가 안되었거나 강제 업로드된 파일이 있는 경우 파일 처리 로직 수행
-    if fitted_params is None:
+    # 1순위: Interpolated 값에서 F0, Fmax 계산 (농도별 최소값/최대값) - exponential 식이 없을 때만 사용
+    if fitted_params is None or len(fitted_params) == 0:
+        fitted_params_from_interp = {}
+        if df_fitted is not None and rfu_col in df_fitted.columns:
+            for conc_val in unique_concs:
+                # 같은 농도의 모든 interpolated 값 가져오기
+                conc_data = df_fitted[df_fitted[conc_col_name] == conc_val]
+                if len(conc_data) > 0:
+                    rfu_values = conc_data[rfu_col].values
+                    F0_interp = float(np.min(rfu_values))  # 최소값 = F0
+                    Fmax_interp = float(np.max(rfu_values))  # 최대값 = Fmax
+                    fitted_params_from_interp[float(conc_val)] = {
+                        'F0': F0_interp,
+                        'Fmax': Fmax_interp
+                    }
+        
+        if fitted_params_from_interp and len(fitted_params_from_interp) > 0:
+            fitted_params = fitted_params_from_interp
+            st.session_state['fitted_params'] = fitted_params
+            st.sidebar.success(f"✅ Interpolated 값에서 F0, Fmax 계산 완료 ({len(fitted_params)}개 농도)")
+
+    # 2순위: MM Results 시트에서 읽기 (exponential 식이나 interpolated 값이 없을 때만)
+    if fitted_params is None or len(fitted_params) == 0:
         # 업로드된 파일 또는 자동 로드된 파일 경로 확인
         if uploaded_file is not None:
             import tempfile
@@ -344,10 +365,13 @@ def general_analysis_mode(st):
                 
                 if len(fitted_params) > 0:
                     st.sidebar.success(f"✅ {len(fitted_params)}개 농도 조건의 F0, Fmax 파라미터 로드 완료 (MM Results 시트)")
-                    st.session_state['fitted_params'] = fitted_params
+                    # Interpolated 값이 없을 때만 MM Results 사용
+                    if 'fitted_params' not in st.session_state or len(st.session_state.get('fitted_params', {})) == 0:
+                        st.session_state['fitted_params'] = fitted_params
                 else:
-                    fitted_params = None
-                    st.session_state['fitted_params'] = None
+                    if 'fitted_params' not in st.session_state or len(st.session_state.get('fitted_params', {})) == 0:
+                        fitted_params = None
+                        st.session_state['fitted_params'] = None
                 
                 # Store v0 data from file
                 if v0_concs and v0_vals:
@@ -467,10 +491,24 @@ def general_analysis_mode(st):
     # conc_col_name 컬럼이 있으면 사용, 없으면 enzyme_ugml 사용
     conc_col = 'enzyme_ugml'
     
+    # 실험 타입 확인 (Substrate 농도 변화면 무조건 μM)
+    experiment_type = None
+    # 1. Session state의 interpolation_results에서 확인
+    if 'interpolation_results' in st.session_state and st.session_state.get('mm_data_ready', False):
+        results = st.session_state['interpolation_results']
+        if 'mm_fit_results' in results:
+            experiment_type = results['mm_fit_results'].get('experiment_type')
+    # 2. Session state의 mm_fit_from_file에서 확인
+    if experiment_type is None and 'mm_fit_from_file' in st.session_state:
+        experiment_type = st.session_state['mm_fit_from_file'].get('experiment_type')
+    
     # 원래 컬럼 이름에 따른 단위 결정
     original_conc_col = df['conc_col_name'].iloc[0] if 'conc_col_name' in df.columns else 'Concentration [ug/mL]'
     
-    if 'uM' in original_conc_col:
+    # 실험 타입이 Substrate 농도 변화면 무조건 μM
+    if experiment_type == "Substrate 농도 변화 (표준 MM)":
+        conc_unit = "μM"
+    elif 'uM' in original_conc_col or 'μM' in original_conc_col:
         conc_unit = "μM"
     elif 'nM' in original_conc_col:
         conc_unit = "nM"
@@ -779,7 +817,8 @@ def general_analysis_mode(st):
             fig_alpha = Visualizer.plot_normalized_data(df, conc_unit, time_label, 
                                                        use_lines=True,
                                                        enzyme_name=enzyme_name,
-                                                       substrate_name=substrate_name)
+                                                       substrate_name=substrate_name,
+                                                       experiment_type=experiment_type)
             # 원본 시간 범위로 xaxis 설정
             original_time_max = st.session_state.get('original_time_max', df['time_s'].max())
             if time_unit == 'min':
@@ -817,9 +856,10 @@ def general_analysis_mode(st):
             
             if using_fitted_params:
                 st.success(f"✅ F0, Fmax 파라미터 로드 완료 ({len(fitted_params_used)}개 농도 조건)")
-                st.info("💡 F0, Fmax 값은 Data Load 모드의 정규화를 통해 얻은 exponential 곡선의 interpolated 값들에서 계산된 값입니다 (MM Results 시트).")
+                st.info("💡 F0, Fmax 값은 Data Load 모드의 정규화 exponential 식에서 나온 상수 값입니다.")
+                st.info("📊 사용된 식: F(t) = F₀ + (Fmax - F₀)·[1 - exp(-k_obs·t)]")
             else:
-                st.info("ℹ️ 기본 정규화 방식 사용 중 (interpolated 값에서 F0, Fmax 계산)")
+                st.info("ℹ️ 기본 정규화 방식 사용 중 (Region-based 계산)")
             
             # F0, Fmax 테이블
             if conc_col and 'F0' in df.columns and 'Fmax' in df.columns:
@@ -828,11 +868,39 @@ def general_analysis_mode(st):
                     subset = df[df[conc_col] == conc]
                     fmax_method = subset['Fmax_method'].iloc[0] if 'Fmax_method' in subset.columns else "N/A"
                     
+                    # F0, Fmax 값의 출처 확인
+                    df_F0 = subset['F0'].iloc[0]
+                    df_Fmax = subset['Fmax'].iloc[0]
+                    
+                    # fitted_params에서 값 확인
+                    source_info = "Region-based 계산"
+                    if using_fitted_params and fitted_params_used:
+                        # 농도 매칭 (부동소수점 오차 고려)
+                        matched_conc = None
+                        for fitted_conc in fitted_params_used.keys():
+                            if abs(float(conc) - float(fitted_conc)) < 0.001:
+                                matched_conc = fitted_conc
+                                break
+                        
+                        if matched_conc:
+                            fitted_F0 = fitted_params_used[matched_conc]['F0']
+                            fitted_Fmax = fitted_params_used[matched_conc]['Fmax']
+                            
+                            # 값이 일치하는지 확인
+                            if abs(df_F0 - fitted_F0) < 0.01 and abs(df_Fmax - fitted_Fmax) < 0.01:
+                                if fmax_method == 'fitted_from_data_load':
+                                    source_info = "정규화 exponential 식"
+                                else:
+                                    source_info = "정규화 exponential 식 (정규화 과정 사용)"
+                            else:
+                                source_info = f"정규화 과정 사용 (Exponential 식: F0={fitted_F0:.2f}, Fmax={fitted_Fmax:.2f})"
+                    
                     f0_fmax_data.append({
                         f'농도 ({conc_unit})': conc,
-                        'F₀ (초기)': f"{subset['F0'].iloc[0]:.2f}",
-                        'Fmax (최대)': f"{subset['Fmax'].iloc[0]:.2f}",
+                        'F₀ (초기)': f"{df_F0:.2f}",
+                        'Fmax (최대)': f"{df_Fmax:.2f}",
                         'Fmax 방법': fmax_method,
+                        '출처': source_info,
                         'Alpha 범위': f"{subset['alpha'].min():.3f} - {subset['alpha'].max():.3f}"
                     })
                 
@@ -842,11 +910,14 @@ def general_analysis_mode(st):
             with st.expander("📖 정규화 방법 상세 설명", expanded=False):
                 if using_fitted_params:
                     st.markdown("""
-                    **MM Results 시트에서 F0, Fmax 사용:**
-                    - F0, Fmax: Data Load 모드에서 생성된 MM Results 시트에서 직접 읽어옴
-                    - 곡선: F(t) = F₀ + (Fmax - F₀)·[1 - exp(-k·t)]
-                    - α(t) = (F(t) − F₀) / (Fmax − F₀)
-                    - Data Load 모드에서 이미 계산된 파라미터를 그대로 사용
+                    **정규화 exponential 식에서 F0, Fmax 사용:**
+                    - F0, Fmax: Data Load 모드의 정규화 과정에서 얻은 exponential 식의 상수 값
+                    - **정규화 식**: F(t) = F₀ + (Fmax - F₀)·[1 - exp(-k_obs·t)]
+                      - F₀: 초기 형광값 (정규화 과정에서 계산)
+                      - Fmax: 최대 형광값 (정규화 과정에서 계산)
+                      - k_obs: 관찰된 반응 속도 상수
+                    - **알파 계산**: α(t) = (F(t) − F₀) / (Fmax − F₀)
+                    - Data Load 모드의 `normalize_iterative` 함수에서 반복 정규화를 통해 계산된 값 사용
                     """)
                 else:
                     st.markdown("""

@@ -113,7 +113,7 @@ class Visualizer:
     
     @staticmethod
     def plot_normalized_data(df: pd.DataFrame, conc_unit: str = 'μg/mL', time_label: str = '시간 (초)', use_lines: bool = False,
-                            enzyme_name: str = 'enzyme', substrate_name: str = 'substrate'):
+                            enzyme_name: str = 'enzyme', substrate_name: str = 'substrate', experiment_type: str = None):
         """Plot normalized data (fraction cleaved)
         
         Args:
@@ -123,13 +123,23 @@ class Visualizer:
             use_lines: If True, use lines instead of markers (for fitted curves)
             enzyme_name: Custom name for enzyme (default: 'enzyme')
             substrate_name: Custom name for substrate (default: 'substrate')
+            experiment_type: Experiment type ("Substrate 농도 변화 (표준 MM)" or "Enzyme 농도 변화")
         """
         fig = go.Figure()
         
         colors = px.colors.qualitative.Set1
         conc_col = Visualizer._detect_conc_col(df)
         base = conc_col.split('_')[0].lower()
-        entity_name = substrate_name if base.startswith('pep') or base.startswith('sub') else enzyme_name
+        
+        # 실험 타입에 따라 entity_name 결정
+        if experiment_type == "Substrate 농도 변화 (표준 MM)":
+            entity_name = substrate_name
+        elif experiment_type == "Enzyme 농도 변화" or experiment_type == "Enzyme 농도 변화 (Substrate 고정)":
+            entity_name = enzyme_name
+        else:
+            # 실험 타입이 없으면 컬럼 이름으로 판단
+            entity_name = substrate_name if base.startswith('pep') or base.startswith('sub') else enzyme_name
+        
         concentrations = sorted(df[conc_col].unique())
         
         for idx, conc in enumerate(concentrations):

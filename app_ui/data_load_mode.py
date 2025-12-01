@@ -1042,24 +1042,27 @@ def data_load_mode(st):
                 progress_bar.progress(1.0)
                 status_text.text("✅ Michaelis-Menten 모델 피팅 및 정규화 완료!")
                 
-                # Session state에 저장 (정규화 기반 v0 사용)
-                st.session_state['interpolation_results'] = {
-                    'interp_df': interp_df,
-                    'mm_results_df': mm_results_df,
-                    'mm_results': mm_results,  # 초기속도 탭용 (원본 v0 유지)
-                    'mm_fit_results': mm_fit_results,  # 정규화 기반 MM fit 결과
-                    'x_range_min': x_range_min,
-                    'x_range_max': x_range_max,
-                    'x_data_min': x_data_min,
-                    'x_data_max': x_data_max,
-                    'raw_data': raw_data,
-                    'v0_vs_concentration': {
-                        'concentrations': norm_concentrations,  # 정규화 기반 농도
-                        'v0_values': norm_v0_list  # 정규화 기반 v0
-                    },
-                    'experiment_type': experiment_type,
-                    'normalization_results': normalization_results  # 정규화 결과 추가
-                }
+            # Session state에 저장 (정규화 기반 v0 사용)
+            st.session_state['interpolation_results'] = {
+                'interp_df': interp_df,
+                'mm_results_df': mm_results_df,
+                'mm_results': mm_results,  # 초기속도 탭용 (원본 v0 유지)
+                'mm_fit_results': mm_fit_results,  # 정규화 기반 MM fit 결과
+                'x_range_min': x_range_min,
+                'x_range_max': x_range_max,
+                'x_data_min': x_data_min,
+                'x_data_max': x_data_max,
+                'raw_data': raw_data,
+                'v0_vs_concentration': {
+                    'concentrations': norm_concentrations,  # 정규화 기반 농도
+                    'v0_values': norm_v0_list  # 정규화 기반 v0
+                },
+                'experiment_type': experiment_type,
+                'normalization_results': normalization_results  # 정규화 결과 추가
+            }
+            
+            # 결과 적용 플래그 설정
+            st.session_state['mm_data_ready'] = True
     
     # 결과 표시
     if 'interpolation_results' in st.session_state:

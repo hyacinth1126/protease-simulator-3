@@ -324,10 +324,18 @@ class Visualizer:
             subset = initial_data[initial_data[conc_col] == conc]
             if len(subset) >= 2:
                 # Linear fit to get slope
-                coeffs = np.polyfit(subset['time_s'], subset['alpha'], 1)
-                v0 = coeffs[0]  # slope = dα/dt
-                rates.append(v0)
-                concentrations.append(conc)
+                try:
+                    # Check for valid data
+                    if subset['alpha'].isnull().any() or np.isinf(subset['alpha']).any():
+                        continue
+                        
+                    coeffs = np.polyfit(subset['time_s'], subset['alpha'], 1)
+                    v0 = coeffs[0]  # slope = dα/dt
+                    rates.append(v0)
+                    concentrations.append(conc)
+                except (np.linalg.LinAlgError, ValueError, TypeError):
+                    # Skip this concentration if fit fails
+                    continue
         
         fig = go.Figure()
         

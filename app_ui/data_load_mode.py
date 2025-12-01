@@ -1211,30 +1211,110 @@ def data_load_mode(st):
                                 t_plateau = 3.0 * tau
                                 
                                 # 세로선 추가 (데이터 범위 내에 있는 경우만)
+                                # 각 구간을 화살표와 텍스트로 표시 (배경 없이 흰색 글씨, y 위치를 다르게 설정)
                                 if t_initial <= t_max:
+                                    # 초기 구간 세로선
                                     fig_norm.add_vline(
                                         x=t_initial,
                                         line_dash="dash",
-                                        line_color="orange",
-                                        annotation_text="초기 구간 (t ≤ 0.1τ)",
-                                        annotation_position="top"
+                                        line_color="orange"
                                     )
-                                if t_exponential_end <= t_max:
+                                    # 화살표와 텍스트 annotation 추가 (y=1.05, 가장 아래)
+                                    fig_norm.add_annotation(
+                                        x=t_initial,
+                                        y=1.05,
+                                        text="초기 구간 (t ≤ 0.1τ)",
+                                        showarrow=True,
+                                        arrowhead=2,
+                                        arrowsize=1,
+                                        arrowwidth=2,
+                                        arrowcolor="orange",
+                                        ax=0,
+                                        ay=-30,
+                                        bgcolor="rgba(0,0,0,0)",
+                                        bordercolor="rgba(0,0,0,0)",
+                                        borderwidth=0,
+                                        font=dict(size=11, color="white")
+                                    )
+                                
+                                # 지수 구간: 0.1τ와 3τ 사이의 중간 지점에 annotation 추가
+                                if t_exponential_end <= t_max and t_initial <= t_max:
+                                    # 지수 구간 시작과 끝 세로선
+                                    fig_norm.add_vline(
+                                        x=t_exponential_start,
+                                        line_dash="dash",
+                                        line_color="purple"
+                                    )
                                     fig_norm.add_vline(
                                         x=t_exponential_end,
                                         line_dash="dash",
-                                        line_color="purple",
-                                        annotation_text="지수 구간 끝 (t = 3τ)",
-                                        annotation_position="top"
+                                        line_color="purple"
                                     )
+                                    # 지수 구간 중간 지점 계산 (0.1τ와 3τ의 중간)
+                                    t_exponential_mid = (t_exponential_start + t_exponential_end) / 2.0
+                                    # 중간 지점이 데이터 범위 내에 있는 경우에만 annotation 추가
+                                    if t_exponential_mid <= t_max:
+                                        fig_norm.add_annotation(
+                                            x=t_exponential_mid,
+                                            y=1.10,
+                                            text="지수 구간 (0.1τ < t < 3τ)",
+                                            showarrow=True,
+                                            arrowhead=2,
+                                            arrowsize=1,
+                                            arrowwidth=2,
+                                            arrowcolor="purple",
+                                            ax=0,
+                                            ay=-30,
+                                            bgcolor="rgba(0,0,0,0)",
+                                            bordercolor="rgba(0,0,0,0)",
+                                            borderwidth=0,
+                                            font=dict(size=11, color="white")
+                                        )
+                                
                                 if t_plateau <= t_max:
+                                    # plateau 세로선 추가
                                     fig_norm.add_vline(
                                         x=t_plateau,
                                         line_dash="dash",
-                                        line_color="brown",
-                                        annotation_text="Plateau 구간 (t ≥ 3τ)",
-                                        annotation_position="top"
+                                        line_color="brown"
                                     )
+                                    # 화살표와 텍스트 annotation 추가 (y=1.15, 가장 위)
+                                    # t_exponential_end와 같은 위치인지 확인하여 x 위치 조정
+                                    if abs(t_plateau - t_exponential_end) < 0.001:
+                                        # 같은 위치이면 x 방향으로 약간 이동하여 겹침 방지
+                                        fig_norm.add_annotation(
+                                            x=t_plateau,
+                                            y=1.15,
+                                            text="Plateau 구간 (t ≥ 3τ)",
+                                            showarrow=True,
+                                            arrowhead=2,
+                                            arrowsize=1,
+                                            arrowwidth=2,
+                                            arrowcolor="brown",
+                                            ax=20,
+                                            ay=-30,
+                                            bgcolor="rgba(0,0,0,0)",
+                                            bordercolor="rgba(0,0,0,0)",
+                                            borderwidth=0,
+                                            font=dict(size=11, color="white")
+                                        )
+                                    else:
+                                        fig_norm.add_annotation(
+                                            x=t_plateau,
+                                            y=1.15,
+                                            text="Plateau 구간 (t ≥ 3τ)",
+                                            showarrow=True,
+                                            arrowhead=2,
+                                            arrowsize=1,
+                                            arrowwidth=2,
+                                            arrowcolor="brown",
+                                            ax=0,
+                                            ay=-30,
+                                            bgcolor="rgba(0,0,0,0)",
+                                            bordercolor="rgba(0,0,0,0)",
+                                            borderwidth=0,
+                                            font=dict(size=11, color="white")
+                                        )
                         
                         fig_norm.update_layout(
                             xaxis_title='Time (min)',
@@ -1246,7 +1326,8 @@ def data_load_mode(st):
                             paper_bgcolor='rgba(0,0,0,0)',
                             hovermode='x unified',
                             # Y축 범위를 0-1로 고정 (정규화된 데이터)
-                            yaxis=dict(range=[0, 1.05]),  # 약간 여유를 두어 1.0이 잘 보이도록
+                            # annotation이 잘 보이도록 범위 확장
+                            yaxis=dict(range=[0, 1.20]),  # annotation 공간 확보
                             # X축 범위를 데이터 범위로 제한
                             xaxis=dict(range=[t_min, t_max]),
                             legend=dict(
@@ -1255,9 +1336,9 @@ def data_load_mode(st):
                                 y=0.05,
                                 xanchor="right",
                                 x=0.99,
-                                bgcolor="rgba(255,255,255,0.8)",
-                                bordercolor="rgba(0,0,0,0.2)",
-                                borderwidth=1
+                                bgcolor="rgba(0,0,0,0)",
+                                bordercolor="rgba(0,0,0,0)",
+                                borderwidth=0
                             )
                         )
                         
@@ -1265,8 +1346,16 @@ def data_load_mode(st):
                         
                         # 방정식 및 R² 테이블
                         st.subheader("정규화 파라미터")
+                        # 실험 타입에 따라 농도 단위 결정
+                        exp_type = results.get('mm_fit_results', {}).get('experiment_type', 'Substrate 농도 변화 (표준 MM)')
+                        conc_value = norm_data['concentration']
+                        if exp_type == "Substrate 농도 변화 (표준 MM)":
+                            conc_display = f"{conc_value} μM"
+                        else:  # Enzyme 농도 변화
+                            conc_display = f"{conc_value} μg/mL"
+                        
                         param_data = {
-                            '농도': [selected_conc],
+                            '농도': [conc_display],
                             'F₀': [f"{norm_data['F0']:.4f}"],
                             'F_max': [f"{norm_data['Fmax']:.4f}"],
                             'k_obs': [f"{norm_data['k_obs']:.4f}" if norm_data['k_obs'] is not None else "N/A"],
@@ -1285,8 +1374,15 @@ def data_load_mode(st):
                             n_data = norm_results[conc_name]
                             # v0 계산
                             v0_conc = n_data['k_obs'] * (n_data['Fmax'] - n_data['F0']) if n_data['k_obs'] is not None else None
+                            # 농도 표시 (실험 타입에 따라 단위 변환)
+                            conc_value = n_data['concentration']
+                            if exp_type == "Substrate 농도 변화 (표준 MM)":
+                                conc_display = f"{conc_value} μM"
+                            else:  # Enzyme 농도 변화
+                                conc_display = f"{conc_value} μg/mL"
+                            
                             summary_data.append({
-                                '농도': conc_name,
+                                '농도': conc_display,
                                 'F₀': f"{n_data['F0']:.4f}",
                                 'F_max': f"{n_data['Fmax']:.4f}",
                                 'k_obs': f"{n_data['k_obs']:.4f}" if n_data['k_obs'] is not None else "N/A",
@@ -1323,6 +1419,19 @@ def data_load_mode(st):
                     if exp_type == "Substrate 농도 변화 (표준 MM)":
                         st.subheader("v₀ vs [S] Michaelis-Menten Fit")
                         
+                        # 실험 데이터 테이블 (expander)
+                        with st.expander("📋 실험 데이터 미리보기", expanded=False):
+                            # 농도와 v0 데이터를 테이블로 표시
+                            exp_data = {
+                                '[S] (μM)': v0_data['concentrations'],
+                                'v₀ (RFU/min)': v0_data['v0_values']
+                            }
+                            exp_df = pd.DataFrame(exp_data)
+                            # 농도 순서대로 정렬
+                            exp_df = exp_df.sort_values('[S] (μM)')
+                            exp_df = exp_df.reset_index(drop=True)
+                            st.dataframe(exp_df, use_container_width=True, hide_index=True)
+                        
                         # MM 피팅 곡선
                         if mm_fit['fit_success'] and mm_fit['Vmax'] is not None and mm_fit['Km'] is not None:
                             conc_min = min(v0_data['concentrations'])
@@ -1334,7 +1443,7 @@ def data_load_mode(st):
                                 x=conc_range,
                                 y=v0_fitted,
                                 mode='lines',
-                                name=f'MM Fit: {mm_fit["equation"]}',
+                                name=f'{mm_fit["equation"]}',
                                 line=dict(width=2.5, color='blue')
                             ))
                             
@@ -1349,9 +1458,9 @@ def data_load_mode(st):
                                 xanchor='left', yanchor='top',
                                 text=stats_text,
                                 showarrow=False,
-                                bgcolor="rgba(255,255,255,0.8)",
-                                bordercolor="blue",
-                                borderwidth=2,
+                                bgcolor="rgba(0,0,0,0)",
+                                bordercolor="rgba(0,0,0,0)",
+                                borderwidth=0,
                                 font=dict(size=11)
                             )
                         
@@ -1366,6 +1475,19 @@ def data_load_mode(st):
                     else:
                         st.subheader("v₀ vs [E] Linear Fit (Substrate 고정)")
                         st.warning("⚠️ 표준 Michaelis-Menten 모델이 아닙니다. v는 [E]에 대해 선형 관계입니다.")
+                        
+                        # 실험 데이터 테이블 (expander)
+                        with st.expander("📋 실험 데이터 미리보기", expanded=False):
+                            # 농도와 v0 데이터를 테이블로 표시
+                            exp_data = {
+                                '[E] (μg/mL)': v0_data['concentrations'],
+                                'v₀ (RFU/min)': v0_data['v0_values']
+                            }
+                            exp_df = pd.DataFrame(exp_data)
+                            # 농도 순서대로 정렬
+                            exp_df = exp_df.sort_values('[E] (μg/mL)')
+                            exp_df = exp_df.reset_index(drop=True)
+                            st.dataframe(exp_df, use_container_width=True, hide_index=True)
                         
                         # 선형 피팅 곡선
                         if mm_fit['fit_success'] and mm_fit.get('slope') is not None:
@@ -1396,9 +1518,9 @@ def data_load_mode(st):
                                 xanchor='left', yanchor='top',
                                 text=stats_text,
                                 showarrow=False,
-                                bgcolor="rgba(255,255,255,0.9)",
-                                bordercolor="orange",
-                                borderwidth=2,
+                                bgcolor="rgba(0,0,0,0)",
+                                bordercolor="rgba(0,0,0,0)",
+                                borderwidth=0,
                                 font=dict(size=11)
                             )
                         

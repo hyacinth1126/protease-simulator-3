@@ -460,6 +460,19 @@ class Visualizer:
         """Create comparison table for models"""
         data = []
         
+        # Define relevant parameters for each model
+        model_relevant_params = {
+            "Model A: Substrate Depletion": ['kcat_KM'],
+            "Model B: Enzyme Deactivation": ['kcat_KM', 'kd'],
+            "Model C: Mass-Transfer Limitation": ['kcat_KM', 'km', 'Gamma0'],
+            "Model D: Concentration-Dependent Fmax": ['kcat_KM', 'alpha_inf', 'k_access'],
+            "Model E: Product Inhibition": ['kcat_KM', 'Ki_eff'],
+            "Model F: Enzyme Surface Sequestration": ['kcat_KM', 'k_ads', 'K_ads']
+        }
+        
+        # Master list of all parameters
+        all_params = ['kcat_KM', 'kd', 'km', 'Gamma0', 'alpha_inf', 'k_access', 'Ki_eff', 'k_ads', 'K_ads']
+        
         for result in results:
             if result is None:
                 continue
@@ -473,28 +486,50 @@ class Visualizer:
                 '파라미터 수': len(result.params)
             }
             
-            # Add parameter values
-            for param_name, param_value in result.params.items():
-                if param_name == 'kcat_KM':
-                    row[param_name] = f"{param_value:.2e} M⁻¹s⁻¹"
-                elif param_name == 'kd':
-                    row[param_name] = f"{param_value:.4f} s⁻¹"
-                elif param_name == 'km':
-                    row[param_name] = f"{param_value:.2e} m/s"
-                elif param_name == 'Gamma0':
-                    row[param_name] = f"{param_value:.2f} pmol/cm²"
-                elif param_name == 'alpha_inf':
-                    row[param_name] = f"{param_value:.4f}"
-                elif param_name == 'k_access':
-                    row[param_name] = f"{param_value:.2e} M⁻¹"
-                elif param_name == 'Ki_eff':
-                    row[param_name] = f"{param_value:.4f}"
-                elif param_name == 'k_ads':
-                    row[param_name] = f"{param_value:.4f} s⁻¹"
-                elif param_name == 'K_ads':
-                    row[param_name] = f"{param_value:.2e} M⁻¹"
+            # Get relevant params for this model
+            # If model name matches partially (for robustness), find the key
+            relevant = []
+            for model_name, params in model_relevant_params.items():
+                if result.name == model_name:
+                    relevant = params
+                    break
+            
+            if not relevant and result.name in model_relevant_params:
+                 relevant = model_relevant_params[result.name]
+
+            # Populate columns
+            for param_key in all_params:
+                if param_key in relevant:
+                    # Relevant parameter
+                    if param_key in result.params:
+                        value = result.params[param_key]
+                        # Format value
+                        if param_key == 'kcat_KM':
+                            row[param_key] = f"{value:.2e} M⁻¹s⁻¹"
+                        elif param_key == 'kd':
+                            row[param_key] = f"{value:.4f} s⁻¹"
+                        elif param_key == 'km':
+                            row[param_key] = f"{value:.2e} m/s"
+                        elif param_key == 'Gamma0':
+                            row[param_key] = f"{value:.2f} pmol/cm²"
+                        elif param_key == 'alpha_inf':
+                            row[param_key] = f"{value:.4f}"
+                        elif param_key == 'k_access':
+                            row[param_key] = f"{value:.2e} M⁻¹"
+                        elif param_key == 'Ki_eff':
+                            row[param_key] = f"{value:.4f}"
+                        elif param_key == 'k_ads':
+                            row[param_key] = f"{value:.4f} s⁻¹"
+                        elif param_key == 'K_ads':
+                            row[param_key] = f"{value:.2e} M⁻¹"
+                        else:
+                            row[param_key] = f"{value:.4e}"
+                    else:
+                        # Relevant but missing
+                        row[param_key] = None
                 else:
-                    row[param_name] = f"{param_value:.4e}"
+                    # Irrelevant parameter
+                    row[param_key] = '-'
             
             data.append(row)
         

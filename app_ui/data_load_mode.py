@@ -539,12 +539,14 @@ def data_load_mode(st):
     
     if experiment_type == "Enzyme 농도 변화 (Substrate 고정)":
         st.sidebar.warning("""
-        ⚠️ **주의: 표준 Michaelis-Menten 모델이 아닙니다**
+        ⚠️ **Substrate 고정 + Enzyme 농도 변화 실험**
         
-        - Substrate 고정 + Enzyme 농도 변화 실험
-        - v는 [E]에 대해 **선형(linear)** 관계
-        - **Km을 구할 수 없음** (기질 농도 gradient 필요)
-        - 구할 수 있는 파라미터: **kcat** 또는 **kcat/Km** (제한적)
+        - v는 [E]에 대해 **선형(linear)** 관계입니다
+        - **Km을 구할 수 없습니다** (기질 농도 gradient 필요)
+        - **Vmax를 구할 수 없습니다** (표준 MM 정의에선 [E] 고정 필요)
+        - 구할 수 있는 파라미터:
+          - **slope = kcat × [S] / (Km + [S])**
+          - Substrate 농도가 매우 낮으면: **slope ≈ kcat/Km × [S]**
         """)
     
     # Enzyme 농도 입력 (kcat 계산용, Substrate 농도 변화 실험에서만 필요)
@@ -754,18 +756,6 @@ def data_load_mode(st):
                             # Substrate 농도가 알려져 있으면 kcat/Km을 추정할 수 있음 (희석 조건)
                             cal_equation = f"v₀ = {slope:.4f} * [E] + {intercept:.4f} (선형)"
                             mm_fit_success = True
-                            
-                            # 경고 메시지
-                            st.warning("""
-                            ⚠️ **Substrate 고정 + Enzyme 농도 변화 실험**
-                            
-                            - v는 [E]에 대해 **선형(linear)** 관계입니다
-                            - **Km을 구할 수 없습니다** (기질 농도 gradient 필요)
-                            - **Vmax를 구할 수 없습니다** (표준 MM 정의에선 [E] 고정 필요)
-                            - 구할 수 있는 파라미터:
-                              - **slope = kcat × [S] / (Km + [S])**
-                              - Substrate 농도가 매우 낮으면: **slope ≈ kcat/Km × [S]**
-                            """)
                         except Exception as e:
                             st.warning(f"⚠️ 선형 피팅 실패: {e}")
                             Vmax = None
@@ -1106,6 +1096,9 @@ def data_load_mode(st):
                     
                     st.info(f"**선형 방정식:** {mm_fit['equation']}")
                     st.info("""
+                    📌 **실험 특성:**
+                    - v는 [E]에 대해 **선형(linear)** 관계입니다
+                    
                     📌 **구할 수 있는 파라미터:**
                     - **Slope**: kcat × [S] / (Km + [S])
                     - Substrate 농도가 매우 낮으면: slope ≈ kcat/Km × [S]

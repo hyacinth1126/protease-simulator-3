@@ -362,36 +362,36 @@ def data_load_mode(st):
     os.makedirs("prep_raw_data_mode/results", exist_ok=True)
     os.makedirs("data_interpolation_mode/results", exist_ok=True)
     
-    st.header("📥 Data Load 모드")
+    st.header("📥 Data Load Mode")
     st.markdown("---")
     
-    # 사이드바 설정
-    st.sidebar.title("⚙️ Data Load 설정")
+    # Sidebar configuration
+    st.sidebar.title("⚙️ Data Load Settings")
     
-    # 실험 조건 선택 (파일 업로드 전에 선택)
-    st.sidebar.subheader("🔬 실험 조건 설정")
+    # Experiment condition selection (before file upload)
+    st.sidebar.subheader("🔬 Experiment Condition")
     experiment_type = st.sidebar.radio(
-        "실험 조건",
-        ["Substrate 농도 변화 (표준 MM)", "Enzyme 농도 변화 (Substrate 고정)"],
-        help="Substrate 농도 변화: 표준 MM 적용 가능 | Enzyme 농도 변화: 표준 MM 적용 불가, 선형 관계"
+        "Experiment Type",
+        ["Substrate Concentration Variation (Standard MM)", "Enzyme Concentration Variation (Substrate Fixed)"],
+        help="Substrate Concentration Variation: Standard MM applicable | Enzyme Concentration Variation: Standard MM not applicable, linear relationship"
     )
     
-    # 실험 타입에 따라 샘플 파일 경로 결정
-    if experiment_type == "Substrate 농도 변화 (표준 MM)":
+    # Determine sample file path based on experiment type
+    if experiment_type == "Substrate Concentration Variation (Standard MM)":
         sample_file_path = "raw/raw_substrate.csv"
         sample_file_name = "raw_substrate_sample.csv"
-        sample_file_label = "샘플 raw_substrate.csv 다운로드"
-    else:  # Enzyme 농도 변화 (Substrate 고정)
+        sample_file_label = "Download Sample raw_substrate.csv"
+    else:  # Enzyme Concentration Variation (Substrate Fixed)
         sample_file_path = "raw/raw_enzyme.csv"
         sample_file_name = "raw_enzyme_sample.csv"
-        sample_file_label = "샘플 raw_enzyme.csv 다운로드"
+        sample_file_label = "Download Sample raw_enzyme.csv"
     
-    # CSV/XLSX 파일 업로드
-    st.sidebar.subheader("📁 데이터 파일 업로드")
+    # CSV/XLSX file upload
+    st.sidebar.subheader("📁 Data File Upload")
     uploaded_file = st.sidebar.file_uploader(
-        "Prep Raw 데이터 파일 업로드 (CSV 또는 XLSX)",
+        "Upload Prep Raw Data File (CSV or XLSX)",
         type=['csv', 'xlsx'],
-        help="prep_raw.csv/xlsx 형식: 시간, 농도별 값, SD, 복제수 (3개 컬럼씩)"
+        help="prep_raw.csv/xlsx format: Time, concentration values, SD, replicates (3 columns each)"
     )
     
     # 샘플 데이터 다운로드 (실험 타입에 따라 다른 파일)
@@ -424,7 +424,7 @@ def data_load_mode(st):
             raw_data = read_raw_data(tmp_path)
             os.unlink(tmp_path)
         except Exception as e:
-            st.error(f"파일 읽기 오류: {e}")
+            st.error(f"File reading error: {e}")
             if os.path.exists(tmp_path):
                 os.unlink(tmp_path)
             return
@@ -432,17 +432,17 @@ def data_load_mode(st):
         # 기본 샘플 데이터 사용 (실험 타입에 따라 다른 파일)
         from pathlib import Path
         
-        # 실험 타입에 따라 샘플 파일 경로 결정
-        if experiment_type == "Substrate 농도 변화 (표준 MM)":
+        # Determine sample file path based on experiment type
+        if experiment_type == "Substrate Concentration Variation (Standard MM)":
             default_sample_paths = [
-                'raw/raw_substrate.csv',  # 현재 작업 디렉토리 기준
-                str(Path(__file__).parent.parent / 'raw' / 'raw_substrate.csv'),  # 스크립트 기준
+                'raw/raw_substrate.csv',  # Current working directory
+                str(Path(__file__).parent.parent / 'raw' / 'raw_substrate.csv'),  # Script directory
             ]
             default_sample_name = "raw/raw_substrate.csv"
-        else:  # Enzyme 농도 변화 (Substrate 고정)
+        else:  # Enzyme Concentration Variation (Substrate Fixed)
             default_sample_paths = [
-                'raw/raw_enzyme.csv',  # 현재 작업 디렉토리 기준
-                str(Path(__file__).parent.parent / 'raw' / 'raw_enzyme.csv'),  # 스크립트 기준
+                'raw/raw_enzyme.csv',  # Current working directory
+                str(Path(__file__).parent.parent / 'raw' / 'raw_enzyme.csv'),  # Script directory
             ]
             default_sample_name = "raw/raw_enzyme.csv"
         
@@ -459,18 +459,18 @@ def data_load_mode(st):
                 continue
         
         if raw_data is None:
-            # 마지막 시도: 현재 작업 디렉토리에서 직접 찾기
+            # Last attempt: search in current working directory
             try:
                 raw_data = read_raw_data(default_sample_name)
-                st.sidebar.info(f"{default_sample_name} 사용 중")
+                st.sidebar.info(f"Using {default_sample_name}")
             except Exception as e:
-                st.error(f"데이터 파일을 찾을 수 없습니다. CSV 또는 XLSX 파일을 업로드해주세요.\n오류: {str(e)}")
+                st.error(f"Data file not found. Please upload a CSV or XLSX file.\nError: {str(e)}")
                 st.stop()
         else:
-            st.sidebar.info(f"{used_path} 사용 중")
+            st.sidebar.info(f"Using {used_path}")
     
-    # 데이터 미리보기
-    st.subheader("📋 데이터 미리보기")
+    # Data preview
+    st.subheader("📋 Data Preview")
     
     # 반응 시간 계산 (최대값)
     all_times = [time_val for data in raw_data.values() for time_val in data['time']] if raw_data else []
@@ -487,7 +487,7 @@ def data_load_mode(st):
             uploaded_file.seek(0)
         else:
             # 실험 타입에 따라 다른 샘플 파일 사용
-            if experiment_type == "Substrate 농도 변화 (표준 MM)":
+            if experiment_type == "Substrate Concentration Variation (Standard MM)":
                 default_n_file = 'raw/raw_substrate.csv'
             else:  # Enzyme 농도 변화 (Substrate 고정)
                 default_n_file = 'raw/raw_enzyme.csv'
@@ -500,27 +500,27 @@ def data_load_mode(st):
     except:
         n_value = 50
     
-    # raw_data가 없으면 에러 메시지 표시
+    # Show error message if raw_data is not available
     if not raw_data:
-        st.error("데이터를 로드할 수 없습니다. CSV 또는 XLSX 파일을 업로드해주세요.")
+        st.error("Unable to load data. Please upload a CSV or XLSX file.")
         return
     
-    # 농도별 데이터 포인트 수 계산 (모든 농도에서 동일)
+    # Calculate number of data points per concentration (same for all concentrations)
     sorted_conc = sorted(raw_data.items(), key=lambda x: x[1]['concentration'])
     num_data_points = len(sorted_conc[0][1]['time']) if len(sorted_conc) > 0 else 0
     
     col1, col2, col3, col4 = st.columns(4)
     with col1:
-        st.metric("농도 조건 수", len(raw_data))
+        st.metric("Number of Concentrations", len(raw_data))
     with col2:
-        st.metric("농도별 데이터 포인트 수", num_data_points)
+        st.metric("Data Points per Concentration", num_data_points)
     with col3:
-        st.metric("반응 시간", reaction_time)
+        st.metric("Reaction Time", reaction_time)
     with col4:
-        st.metric("N(시험 수)", n_value)
+        st.metric("N (Number of Replicates)", n_value)
     
-    # 농도별 정보 표시
-    with st.expander("농도별 데이터 정보", expanded=False):
+    # Display concentration-specific information
+    with st.expander("Concentration Data Information", expanded=False):
         if len(sorted_conc) > 0:
             first_data = sorted_conc[0][1]
             times = first_data['time']
@@ -537,7 +537,7 @@ def data_load_mode(st):
         else:
             st.info("데이터가 없습니다.")
     
-    if experiment_type == "Enzyme 농도 변화 (Substrate 고정)":
+    if experiment_type == "Enzyme Concentration Variation (Substrate Fixed)":
         st.sidebar.warning("""
         ⚠️ **Substrate 고정 + Enzyme 농도 변화 실험**
         
@@ -550,7 +550,7 @@ def data_load_mode(st):
         """)
     
     # Enzyme 농도 입력 (kcat 계산용, Substrate 농도 변화 실험에서만 필요)
-    if experiment_type == "Substrate 농도 변화 (표준 MM)":
+    if experiment_type == "Substrate Concentration Variation (Standard MM)":
         st.sidebar.subheader("🧪 Enzyme 농도 설정 (kcat 계산용)")
         enzyme_conc_input = st.sidebar.number_input(
             "Enzyme 농도 [E] (μg/mL)",
@@ -563,7 +563,7 @@ def data_load_mode(st):
         enzyme_conc_input = None
     
     # Michaelis-Menten 모델 실행 버튼
-    if st.button("🚀 Michaelis-Menten Model 실행", type="primary"):
+    if st.button("🚀 Run Michaelis-Menten Model", type="primary"):
             with st.spinner("Michaelis-Menten 모델 피팅 진행 중..."):
                 progress_bar = st.progress(0)
                 status_text = st.empty()
@@ -612,7 +612,7 @@ def data_load_mode(st):
                     # 농도 단위 결정: 실험 타입에 따라
                     # Substrate 농도 변화: uM (몰농도)
                     # Enzyme 농도 변화: ug/mL (질량 농도)
-                    if experiment_type == "Substrate 농도 변화 (표준 MM)":
+                    if experiment_type == "Substrate Concentration Variation (Standard MM)":
                         conc_unit_col = 'Concentration [μM]'
                     else:  # Enzyme 농도 변화
                         conc_unit_col = 'Concentration [ug/mL]'
@@ -630,8 +630,8 @@ def data_load_mode(st):
                 
                 progress_bar.progress(0.4)
                 
-                # 2. Interpolation 범위 계산
-                status_text.text("2️⃣ 보간 범위 계산 중...")
+                # 2. Calculate interpolation range
+                status_text.text("2️⃣ Calculating interpolation range...")
                 
                 all_times = [time_val for data in raw_data.values() for time_val in data['time']]
                 x_data_min = min(all_times)
@@ -648,14 +648,14 @@ def data_load_mode(st):
                 
                 progress_bar.progress(0.6)
                 
-                # 3. Interpolation 수행 (정규화 결과 사용)
-                status_text.text("3️⃣ 보간 곡선 생성 중...")
+                # 3. Perform interpolation (using normalization results)
+                status_text.text("3️⃣ Generating interpolation curves...")
                 
                 all_interp_data = []
                 # 농도 단위 결정: 실험 타입에 따라
                 # Substrate 농도 변화: uM (몰농도)
                 # Enzyme 농도 변화: ug/mL (질량 농도)
-                if experiment_type == "Substrate 농도 변화 (표준 MM)":
+                if experiment_type == "Substrate Concentration Variation (Standard MM)":
                     conc_unit_col = 'Concentration [μM]'
                 else:  # Enzyme 농도 변화
                     conc_unit_col = 'Concentration [ug/mL]'
@@ -689,9 +689,9 @@ def data_load_mode(st):
                 
                 progress_bar.progress(0.7)
                 
-                # 4. v₀ vs 농도 피팅 (실험 조건에 따라 다름)
-                if experiment_type == "Substrate 농도 변화 (표준 MM)":
-                    status_text.text("4️⃣ v₀ vs [S] Michaelis-Menten 피팅 중...")
+                # 4. Fit v₀ vs concentration (varies by experiment condition)
+                if experiment_type == "Substrate Concentration Variation (Standard MM)":
+                    status_text.text("4️⃣ Fitting v₀ vs [S] Michaelis-Menten...")
                     
                     # 농도와 초기 속도 데이터 수집
                     concentrations = [params['concentration'] for params in sorted(mm_results.values(), 
@@ -711,7 +711,7 @@ def data_load_mode(st):
                             kcat = None
                             mm_fit_success = True
                         except Exception as e:
-                            st.warning(f"⚠️ MM 피팅 실패: {e}")
+                            st.warning(f"⚠️ MM fitting failed: {e}")
                             Vmax = None
                             Km = None
                             kcat = None
@@ -726,8 +726,8 @@ def data_load_mode(st):
                         cal_equation = "데이터 부족 (최소 2개 농도 필요)"
                         mm_fit_success = False
                 
-                else:  # Enzyme 농도 변화 (Substrate 고정)
-                    status_text.text("4️⃣ v₀ vs [E] 선형 피팅 중... (표준 MM 아님)")
+                else:  # Enzyme Concentration Variation (Substrate Fixed)
+                    status_text.text("4️⃣ Fitting v₀ vs [E] linear... (not standard MM)")
                     
                     # 농도와 초기 속도 데이터 수집
                     concentrations = [params['concentration'] for params in sorted(mm_results.values(), 
@@ -762,7 +762,7 @@ def data_load_mode(st):
                             cal_equation = f"v₀ = {slope:.4f} * [E] + {intercept:.4f} (선형)"
                             mm_fit_success = True
                         except Exception as e:
-                            st.warning(f"⚠️ 선형 피팅 실패: {e}")
+                            st.warning(f"⚠️ Linear fitting failed: {e}")
                             Vmax = None
                             Km = None
                             kcat = None
@@ -786,7 +786,7 @@ def data_load_mode(st):
                 # 농도 단위 결정: 실험 타입에 따라
                 # Substrate 농도 변화: uM (몰농도)
                 # Enzyme 농도 변화: ug/mL (질량 농도)
-                if experiment_type == "Substrate 농도 변화 (표준 MM)":
+                if experiment_type == "Substrate Concentration Variation (Standard MM)":
                     conc_unit_col = 'Concentration [μM]'
                 else:  # Enzyme 농도 변화
                     conc_unit_col = 'Concentration [ug/mL]'
@@ -871,20 +871,20 @@ def data_load_mode(st):
                         mm_fit_results['intercept'] = coeffs[1]
                 
                 try:
-                    # Interpolated curves 저장 (CSV)
+                    # Save interpolated curves (CSV)
                     interp_df.to_csv('data_interpolation_mode/results/MM_interpolated_curves.csv', index=False)
                     
-                    # MM results 저장 (CSV)
+                    # Save MM results (CSV)
                     mm_results_df.to_csv('prep_raw_data_mode/results/MM_results_detailed.csv', index=False)
                     
-                    st.sidebar.success("✅ 결과 파일이 저장되었습니다!")
+                    st.sidebar.success("✅ Result files saved!")
                 except Exception as e:
-                    st.sidebar.warning(f"⚠️ 파일 저장 중 오류: {e}")
+                    st.sidebar.warning(f"⚠️ Error saving files: {e}")
                 
                 progress_bar.progress(0.9)
                 
-                # 6. 정규화 수행
-                status_text.text("6️⃣ 정규화 진행 중...")
+                # 6. Perform normalization
+                status_text.text("6️⃣ Normalizing...")
                 
                 normalization_results = {}
                 # 정규화 기반 v0 값들을 저장할 딕셔너리
@@ -961,7 +961,7 @@ def data_load_mode(st):
                         pass
                 
                 # MM fit 재수행 (정규화 기반 v0 사용)
-                if experiment_type == "Substrate 농도 변화 (표준 MM)":
+                if experiment_type == "Substrate Concentration Variation (Standard MM)":
                     if len(norm_concentrations) >= 2 and len(norm_v0_list) >= 2:
                         try:
                             cal_params, cal_fit_values, cal_equation = fit_calibration_curve(norm_concentrations, norm_v0_list)
@@ -992,7 +992,7 @@ def data_load_mode(st):
                                 'slope': None
                             }
                         except Exception as e:
-                            st.warning(f"⚠️ 정규화 기반 MM 피팅 실패: {e}")
+                            st.warning(f"⚠️ Normalized MM fitting failed: {e}")
                             mm_fit_success = False
                     else:
                         mm_fit_success = False
@@ -1075,7 +1075,7 @@ def data_load_mode(st):
                     interp_df = pd.DataFrame(all_interp_data_new)
                 
                 progress_bar.progress(1.0)
-                status_text.text("✅ Michaelis-Menten 모델 피팅 및 정규화 완료!")
+                status_text.text("✅ Michaelis-Menten model fitting and normalization complete!")
                 
             # Session state에 저장 (정규화 기반 v0 사용)
             st.session_state['interpolation_results'] = {
@@ -1104,14 +1104,14 @@ def data_load_mode(st):
             results = st.session_state['interpolation_results']
             
             st.markdown("---")
-            st.subheader("📊 Michaelis-Menten 모델 결과")
+            st.subheader("📊 Michaelis-Menten Model Results")
             
-            # MM 피팅 결과 표시 (실험 조건에 따라 다름)
+            # Display MM fitting results (varies by experiment condition)
             if 'mm_fit_results' in results and results['mm_fit_results']['fit_success']:
                 mm_fit = results['mm_fit_results']
-                exp_type = mm_fit.get('experiment_type', 'Substrate 농도 변화 (표준 MM)')
+                exp_type = mm_fit.get('experiment_type', 'Substrate Concentration Variation (Standard MM)')
                 
-                if exp_type == "Substrate 농도 변화 (표준 MM)":
+                if exp_type == "Substrate Concentration Variation (Standard MM)":
                     # 표준 MM 결과 표시 (Substrate는 μM 단위)
                     col1, col2, col3, col4 = st.columns(4)
                     with col1:
@@ -1123,10 +1123,10 @@ def data_load_mode(st):
                     with col4:
                         st.metric("R²", f"{mm_fit['R_squared']:.4f}")
                     
-                    st.info(f"**MM 방정식:** {mm_fit['equation']}")
+                    st.info(f"**MM Equation:** {mm_fit['equation']}")
                 else:
-                    # Enzyme 농도 변화 결과 표시
-                    st.warning("⚠️ **Substrate 고정 + Enzyme 농도 변화 실험** (표준 MM 아님)")
+                    # Display Enzyme concentration variation results
+                    st.warning("⚠️ **Substrate Fixed + Enzyme Concentration Variation Experiment** (not standard MM)")
                     
                     col1, col2, col3 = st.columns(3)
                     with col1:
@@ -1139,19 +1139,19 @@ def data_load_mode(st):
                     with col3:
                         st.metric("R²", f"{mm_fit['R_squared']:.4f}")
                     
-                    st.info(f"**선형 방정식:** {mm_fit['equation']}")
+                    st.info(f"**Linear Equation:** {mm_fit['equation']}")
                     st.info("""
-                    📌 **실험 특성:**
-                    - v는 [E]에 대해 **선형(linear)** 관계입니다
+                    📌 **Experiment Characteristics:**
+                    - v has a **linear** relationship with [E]
                     
-                    📌 **구할 수 있는 파라미터:**
+                    📌 **Available Parameters:**
                     - **Slope**: kcat × [S] / (Km + [S])
-                    - Substrate 농도가 매우 낮으면: slope ≈ kcat/Km × [S]
+                    - If substrate concentration is very low: slope ≈ kcat/Km × [S]
                     
-                    ❌ **구할 수 없는 파라미터:**
-                    - **Km**: 기질 농도 gradient 필요
-                    - **Vmax**: 표준 MM 정의에선 [E] 고정 필요
-                    - **kcat**: 단독으로 구할 수 없음 (kcat/Km만 가능)
+                    ❌ **Unavailable Parameters:**
+                    - **Km**: Substrate concentration gradient required
+                    - **Vmax**: Standard MM definition requires [E] fixed
+                    - **kcat**: Cannot be determined alone (only kcat/Km possible)
                     """)
             elif 'mm_fit_results' in results:
                 st.warning("⚠️ MM 피팅 실패 또는 데이터 부족")
@@ -1161,9 +1161,9 @@ def data_load_mode(st):
             
             tab_titles = []
             if exp_type == "Substrate 농도 변화 (표준 MM)":
-                tab_titles = ["📊 실험결과", "🔄 정규화", "📊 v₀ vs [S] Fit", "📋 Data Table"]
+                tab_titles = ["📊 Experimental Results", "🔄 Normalization", "📊 v₀ vs [S] Fit", "📋 Data Table"]
             else:
-                tab_titles = ["📊 실험결과", "🔄 정규화", "📊 v₀ vs [E] Linear Fit", "📋 Data Table"]
+                tab_titles = ["📊 Experimental Results", "🔄 Normalization", "📊 v₀ vs [E] Linear Fit", "📋 Data Table"]
             
             # 탭 상태 초기화
             if 'current_data_load_tab' not in st.session_state:
@@ -1199,7 +1199,7 @@ def data_load_mode(st):
             # Tab 1: 실험결과 (점만 표시)
             if selected_tab == tab_titles[0]:
                 # with tab_objects[0]: 대신 직접 렌더링
-                st.subheader("실험결과")
+                st.subheader("Experimental Results")
                 
                 fig = go.Figure()
                 colors = ['blue', 'red', 'orange', 'green', 'purple', 'brown', 'pink', 'gray', 'olive', 'cyan']
@@ -1306,7 +1306,7 @@ def data_load_mode(st):
             # Tab 2: 정규화
             norm_tab_idx = 1
             if selected_tab == tab_titles[norm_tab_idx]:
-                st.subheader("🔄 정규화 결과")
+                st.subheader("🔄 Normalization Results")
                 
                 if 'normalization_results' in results and results['normalization_results']:
                     norm_results = results['normalization_results']

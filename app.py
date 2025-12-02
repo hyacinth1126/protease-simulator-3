@@ -24,7 +24,7 @@ sns.set_style("whitegrid")
 def main():
     """Main Streamlit app"""
     st.set_page_config(
-        page_title="하이드로겔 FRET 고급 분석",
+        page_title="Hydrogel FRET Advanced Analysis",
         page_icon="🔬",
         layout="wide"
     )
@@ -32,21 +32,21 @@ def main():
     st.title("🔬  FRET Protease Simulation")
     st.markdown("---")
     
-    # 모드 선택
+    # Mode selection
     analysis_mode = st.sidebar.radio(
-        "분석 모드 선택",
-        ["Data Load 모드", "Model Simulation 모드"],
-        help="Data Load 모드: CSV 파일 업로드 또는 이미지에서 데이터 추출 | Model Simulation 모드: 표준 FRET 분석"
+        "Select Analysis Mode",
+        ["Data Load Mode", "Model Simulation Mode"],
+        help="Data Load Mode: Upload CSV file or extract data from image | Model Simulation Mode: Standard FRET analysis"
     )
-    # 항상 하단에 푸터 렌더링
+    # Always render footer at bottom
     render_footer()
     
-    # Data Load 모드
-    if analysis_mode == "Data Load 모드":
+    # Data Load Mode
+    if analysis_mode == "Data Load Mode":
         data_load_mode(st)
         return
     
-    # Model Simulation 모드
+    # Model Simulation Mode
     general_analysis_mode(st)
 
 

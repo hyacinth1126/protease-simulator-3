@@ -33,57 +33,57 @@ def verbose_callback(message: str, level: str = "info"):
 
 
 def general_analysis_mode(st):
-    """모델 시뮬레이션 모드 - 표준 FRET 분석"""
+    """Model Simulation Mode - Standard FRET Analysis"""
     
     # Sidebar configuration
-    st.sidebar.title("⚙️ 설정")
+    st.sidebar.title("⚙️ Settings")
     
     enzyme_mw = st.sidebar.number_input(
-        "효소 분자량 (kDa)",
+        "Enzyme Molecular Weight (kDa)",
         min_value=1.0,
         max_value=500.0,
         value=56.6,
         step=0.1,
-        help="농도 변환을 위해 필요한 효소 분자량을 입력해주세요."
+        help="Enter enzyme molecular weight required for concentration conversion."
     )
     
     enzyme_name = st.sidebar.text_input(
-        "효소 이름 (선택사항)",
+        "Enzyme Name (Optional)",
         value="Kgp",
         placeholder="enzyme",
-        help="그래프 범례에 표시될 효소 이름 (비워두면 'enzyme' 표시)"
+        help="Enzyme name displayed in graph legend (defaults to 'enzyme' if empty)"
     )
     if enzyme_name.strip() == "":
         enzyme_name = "enzyme"
     
     substrate_name = st.sidebar.text_input(
-        "기질 이름 (선택사항)",
+        "Substrate Name (Optional)",
         value="Dabcyl-HEK-K(FITC)",
         placeholder="substrate",
-        help="그래프 범례에 표시될 기질 이름 (비워두면 'substrate' 표시)"
+        help="Substrate name displayed in graph legend (defaults to 'substrate' if empty)"
     )
     if substrate_name.strip() == "":
         substrate_name = "substrate"
-    # 구분선 후 데이터 소스 섹션
+    # Separator before data source section
     st.sidebar.markdown("---")
-    st.sidebar.subheader("📁 데이터 소스")
+    st.sidebar.subheader("📁 Data Source")
     
     uploaded_file = st.sidebar.file_uploader(
-        "CSV/XLSX 파일 업로드 (Fitted Curves)",
+        "Upload CSV/XLSX File (Fitted Curves)",
         type=['csv', 'xlsx'],
-        help="Data Load 모드에서 생성된 결과 파일 (CSV 또는 XLSX): XLSX의 경우 'Michaelis-Menten Curves' 시트 사용"
+        help="Result file generated from Data Load Mode (CSV or XLSX): For XLSX, use 'Michaelis-Menten Curves' sheet"
     )
     
-    # Fitted Curves 샘플 다운로드 (Data Load 모드 결과)
+    # Download sample Fitted Curves (Data Load Mode results)
     try:
         with open("data_interpolation_mode/results/MM_interpolated_curves.csv", "rb") as f:
             sample_bytes = f.read()
         st.sidebar.download_button(
-            label="📥 Data Load 결과 CSV 다운로드",
+            label="📥 Download Data Load Result CSV",
             data=sample_bytes,
             file_name="MM_interpolated_curves.csv",
             mime="text/csv",
-            help="Data Load 모드에서 생성된 결과 CSV 파일"
+            help="Result CSV file generated from Data Load Mode"
         )
     except Exception:
         pass
@@ -98,13 +98,13 @@ def general_analysis_mode(st):
             results = st.session_state['interpolation_results']
             df_fitted = results['interp_df'].copy()
             rfu_col = 'RFU_Interpolated' if 'RFU_Interpolated' in df_fitted.columns else 'RFU_Calculated'
-            # experiment_type 확인하여 기준 표시
-            experiment_type = results.get('experiment_type', 'Substrate 농도 변화 (표준 MM)')
-            if experiment_type == "Substrate 농도 변화 (표준 MM)":
-                result_type = "Substrate 기준"
+            # Check experiment_type to display basis
+            experiment_type = results.get('experiment_type', 'Substrate Concentration Variation (Standard MM)')
+            if experiment_type == "Substrate Concentration Variation (Standard MM)":
+                result_type = "Substrate-based"
             else:
-                result_type = "Enzyme 기준"
-            st.success(f"결과적용됨 ({result_type})")
+                result_type = "Enzyme-based"
+            st.success(f"Results Applied ({result_type})")
         except Exception as e:
             # 메모리 로드 실패 시 파일 로드 시도
             pass
@@ -168,7 +168,7 @@ def general_analysis_mode(st):
                     continue
         
         if df_fitted is None:
-            st.error("Data Load 모드 결과 파일을 찾을 수 없습니다. 먼저 'Data Load 모드'를 실행하여 결과를 다운로드하거나 CSV/XLSX 파일을 업로드해주세요.")
+            st.error("Data Load Mode result file not found. Please run 'Data Load Mode' to download results or upload a CSV/XLSX file.")
             st.stop()
         
         # rfu_col이 아직 설정되지 않았으면 설정
@@ -188,7 +188,7 @@ def general_analysis_mode(st):
     elif 'RFU_Interpolated' in df_fitted.columns:
         rfu_col = 'RFU_Interpolated'
     else:
-        st.error("RFU 데이터 컬럼을 찾을 수 없습니다. (RFU_Calculated 또는 RFU_Interpolated)")
+        st.error("RFU data column not found. (RFU_Calculated or RFU_Interpolated)")
         st.stop()
     
     # 엑셀 파일의 데이터 변환
@@ -474,7 +474,7 @@ def general_analysis_mode(st):
     df = df_current
     
     # Display data
-    st.subheader("📊 데이터 미리보기")
+    st.subheader("📊 Data Preview")
     
     # Detect original column names for display
     time_unit = st.session_state.get('time_unit', 'min')
@@ -528,11 +528,11 @@ def general_analysis_mode(st):
     # Tabs for different views
     tab1, tab_alpha, tab2, tab_desc, tab3, tab4 = st.tabs([
         "📊 v₀ vs [S] Fit", 
-        "📈 알파 계산",
-        "🔬 모델 피팅",
-        "📖 모델 설명",
-        "📉 모델 비교",
-        "💡 진단 분석"
+        "📈 Alpha Calculation",
+        "🔬 Model Fitting",
+        "📖 Model Description",
+        "📉 Model Comparison",
+        "💡 Diagnostic Analysis"
     ])
     
     with tab1:
@@ -734,7 +734,7 @@ def general_analysis_mode(st):
             st.plotly_chart(fig_v0, use_container_width=True)
             
             # Show table with additional columns
-            st.subheader("📋 실험 데이터")
+            st.subheader("📋 Experimental Data")
             
             # 테이블 데이터 준비
             table_data = {
@@ -775,7 +775,7 @@ def general_analysis_mode(st):
                 table_data['R²'] = r2_list
                 table_data['k_obs'] = k_obs_list
                 table_data['τ'] = tau_list
-                table_data['방정식'] = equation_list
+                table_data['Equation'] = equation_list
             
             df_table = pd.DataFrame(table_data).sort_values(xaxis_title)
             st.dataframe(df_table, use_container_width=True, hide_index=True)
@@ -784,7 +784,7 @@ def general_analysis_mode(st):
             st.info("⚠️ Michaelis-Menten 피팅 데이터가 없습니다. Data Load 모드에서 분석을 수행하거나 결과 파일(MM Fit Results 시트 포함)을 로드해주세요.")
     
     with tab_alpha:
-        st.subheader("📈 알파(α) 계산")
+        st.subheader("📈 Alpha (α) Calculation")
         
         st.markdown("""
         **알파(α)란?**  
@@ -811,7 +811,7 @@ def general_analysis_mode(st):
             st.info("💡 데이터가 정규화되지 않았습니다. 데이터 로드 및 정규화 과정을 확인해주세요.")
         else:
             # Alpha vs Time Plot
-            st.subheader("📊 정규화 데이터: α(t) vs 시간")
+            st.subheader("📊 Normalized Data: α(t) vs Time")
             
             fig_alpha = Visualizer.plot_normalized_data(df, conc_unit, time_label, 
                                                        use_lines=True,
@@ -827,7 +827,7 @@ def general_analysis_mode(st):
             st.plotly_chart(fig_alpha, use_container_width=True)
             
             # Alpha Statistics
-            st.subheader("📋 농도별 Alpha 통계")
+            st.subheader("📋 Alpha Statistics by Concentration")
             
             conc_col = 'enzyme_ugml' if 'enzyme_ugml' in df.columns else df['conc_col_name'].iloc[0] if 'conc_col_name' in df.columns else None
             
@@ -963,7 +963,7 @@ def general_analysis_mode(st):
             )
     
     with tab2:
-        st.subheader("🔬 글로벌 모델 피팅")
+        st.subheader("🔬 Global Model Fitting")
         
         st.markdown("""
         **기본 모델 (A-C)**: 고전적 효소 키네틱 메커니즘  
@@ -994,7 +994,7 @@ def general_analysis_mode(st):
             fit_model_f = st.checkbox("모델 F: 효소 흡착/격리", value=True)
             st.caption("✓ 표면 흡착 & 비가역 결합")
         
-        if st.button("🚀 글로벌 피팅 실행", type="primary"):
+        if st.button("🚀 Run Global Fitting", type="primary"):
             # 데이터 상태 확인 및 검증
             with st.expander("🔍 데이터 상태 확인", expanded=False):
                 st.write("**필수 컬럼 확인:**")
@@ -1131,7 +1131,7 @@ def general_analysis_mode(st):
             
             # Show completion message
             with result_container:
-                st.success("🎉 모든 모델 피팅 완료! '모델 비교' 탭에서 결과를 확인하세요.")
+                st.success("🎉 All model fitting complete! Check results in the 'Model Comparison' tab.")
     
     with tab_desc:
         st.subheader("📚 키네틱 모델 상세 설명")
@@ -1244,7 +1244,7 @@ def general_analysis_mode(st):
             results = st.session_state['fit_results']
             df = st.session_state['df']
             
-            st.subheader("📊 모델 비교")
+            st.subheader("📊 Model Comparison")
             
             # Comparison table
             comparison_df = Visualizer.create_comparison_table(results)
@@ -1272,7 +1272,7 @@ def general_analysis_mode(st):
                 st.dataframe(pd.DataFrame(param_data), use_container_width=True)
             
             # Plot all model fits
-            st.subheader("📈 전체 모델 피팅 결과")
+            st.subheader("📈 Overall Model Fitting Results")
             fig_models = Visualizer.plot_model_fits(df, results, conc_unit, time_label,
                                                     enzyme_name=enzyme_name,
                                                     substrate_name=substrate_name)
@@ -1285,7 +1285,7 @@ def general_analysis_mode(st):
             st.plotly_chart(fig_models, use_container_width=True)
             
             # Individual model plots
-            st.subheader("📊 개별 모델 비교")
+            st.subheader("📊 Individual Model Comparison")
             st.markdown("각 모델별로 원본 데이터와 피팅 결과를 비교합니다.")
             
             # Create tabs for each model
@@ -1323,7 +1323,7 @@ def general_analysis_mode(st):
                                 )
             
             # Download results
-            st.subheader("💾 결과 다운로드")
+            st.subheader("💾 Download Results")
             csv = comparison_df.to_csv(index=False)
             st.download_button(
                 label="비교 테이블 다운로드 (CSV)",
@@ -1332,7 +1332,7 @@ def general_analysis_mode(st):
                 mime="text/csv"
             )
         else:
-            st.info("👈 먼저 '모델 피팅' 탭에서 피팅을 실행해주세요.")
+            st.info("👈 Please run fitting in the 'Model Fitting' tab first.")
     
     with tab4:
         st.subheader("💡 진단 분석")

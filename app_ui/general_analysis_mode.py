@@ -98,8 +98,13 @@ def general_analysis_mode(st):
             results = st.session_state['interpolation_results']
             df_fitted = results['interp_df'].copy()
             rfu_col = 'RFU_Interpolated' if 'RFU_Interpolated' in df_fitted.columns else 'RFU_Calculated'
-            st.sidebar.success("✅ Data Load 모드 결과 적용됨 (메모리)")
-            st.success("결과적용됨")
+            # experiment_type 확인하여 기준 표시
+            experiment_type = results.get('experiment_type', 'Substrate 농도 변화 (표준 MM)')
+            if experiment_type == "Substrate 농도 변화 (표준 MM)":
+                result_type = "Substrate 기준"
+            else:
+                result_type = "Enzyme 기준"
+            st.success(f"결과적용됨 ({result_type})")
         except Exception as e:
             # 메모리 로드 실패 시 파일 로드 시도
             pass
@@ -118,12 +123,10 @@ def general_analysis_mode(st):
                 # XLSX 파일: "Michaelis-Menten Curves" 시트 읽기
                 df_fitted = pd.read_excel(tmp_path, sheet_name='Michaelis-Menten Curves', engine='openpyxl')
                 rfu_col = 'RFU_Interpolated' if 'RFU_Interpolated' in df_fitted.columns else 'RFU_Calculated'
-                st.sidebar.success("✅ 업로드된 XLSX 파일 사용 중 (Michaelis-Menten Curves 시트)")
             else:
                 # CSV 파일
                 df_fitted = pd.read_csv(tmp_path)
                 rfu_col = 'RFU_Interpolated' if 'RFU_Interpolated' in df_fitted.columns else 'RFU_Calculated'
-                st.sidebar.success("✅ 업로드된 CSV 파일 사용 중")
         finally:
             os.unlink(tmp_path)
     else:
@@ -144,7 +147,6 @@ def general_analysis_mode(st):
                 if os.path.exists(path):
                     df_fitted = pd.read_excel(path, sheet_name='Michaelis-Menten Curves', engine='openpyxl')
                     rfu_col = 'RFU_Interpolated' if 'RFU_Interpolated' in df_fitted.columns else 'RFU_Calculated'
-                    st.sidebar.info(f"✅ Data Load 모드 결과 XLSX 자동 로드됨")
                     break
             except Exception:
                 continue
@@ -161,7 +163,6 @@ def general_analysis_mode(st):
                     if os.path.exists(path):
                         df_fitted = pd.read_csv(path)
                         rfu_col = 'RFU_Interpolated' if 'RFU_Interpolated' in df_fitted.columns else 'RFU_Calculated'
-                        st.sidebar.info(f"✅ Data Load 모드 결과 CSV 자동 로드됨")
                         break
                 except Exception:
                     continue
@@ -227,7 +228,6 @@ def general_analysis_mode(st):
     # 데이터 정보
     unique_times = sorted(df_raw['time_min'].unique())
     unique_concs = sorted(df_raw['enzyme_ugml'].unique())
-    st.sidebar.success(f"✅ {len(unique_concs)}개 농도 조건, {len(unique_times)}개 시간 포인트 로드됨")
     
     # Store data source type for later use
     st.session_state['data_source_type'] = 'Fitted Curves (from Data Load mode)'
@@ -283,7 +283,6 @@ def general_analysis_mode(st):
             
             if fitted_params and len(fitted_params) > 0:
                 st.session_state['fitted_params'] = fitted_params
-                st.sidebar.success(f"✅ Exponential 식에서 F0, Fmax 파라미터 적용됨 ({len(fitted_params)}개 농도)")
         except Exception as e:
             pass
 

@@ -354,11 +354,6 @@ def manual_data_entry(data_type="점"):
     return None
 
 
-def is_substrate_experiment(exp_type):
-    """실험 타입이 Substrate 농도 변화인지 확인 (영어/한국어 버전 모두 지원)"""
-    return (exp_type == "Substrate 농도 변화 (표준 MM)" or 
-            exp_type == "Substrate Concentration Variation (Standard MM)")
-
 def data_load_mode(st):
     """Data Load 모드 - CSV 파일 업로드 또는 이미지에서 데이터 추출"""
     
@@ -617,7 +612,7 @@ def data_load_mode(st):
                     # 농도 단위 결정: 실험 타입에 따라
                     # Substrate 농도 변화: uM (몰농도)
                     # Enzyme 농도 변화: ug/mL (질량 농도)
-                    if is_substrate_experiment(experiment_type):
+                    if experiment_type == "Substrate Concentration Variation (Standard MM)":
                         conc_unit_col = 'Concentration [μM]'
                     else:  # Enzyme 농도 변화
                         conc_unit_col = 'Concentration [ug/mL]'
@@ -675,9 +670,22 @@ def data_load_mode(st):
                     F0 = params['F0']
                     Fmax = params['Fmax']
                     
-                    # 선형 피팅으로 보간 (v0 = 기울기) - 임시로 사용
-                    # F(t) = F0 + v0 * t
-                    y_interp = F0 + v0 * x_interp
+                    # 실험 타입에 따라 다른 보간 방법 사용
+                    if experiment_type == "Substrate Concentration Variation (Standard MM)":
+                        # 기질 농도 변화: Michaelis-Menten kinetics에 따른 지수 결합 모델 사용
+                        # F(t) = F0 + (Fmax - F0) * [1 - exp(-k*t)]
+                        # where k = v0 / (Fmax - F0)
+                        if Fmax > F0 and v0 > 0:
+                            k = v0 / (Fmax - F0)
+                            y_interp = F0 + (Fmax - F0) * (1 - np.exp(-k * x_interp))
+                        else:
+                            # Fallback to linear if invalid parameters
+                            y_interp = F0 + v0 * x_interp
+                    else:
+                        # Enzyme 농도 변화: 선형 관계 사용 (기질 고정)
+                        # F(t) = F0 + v0 * t
+                        y_interp = F0 + v0 * x_interp
+                    
                     # Fmax를 넘지 않도록 제한
                     y_interp = np.clip(y_interp, F0, Fmax)
                     
@@ -818,7 +826,7 @@ def data_load_mode(st):
                 enzyme_conc = None
                 
                 # 1) 사용자 입력값 확인
-                if experiment_type == "Substrate 농도 변화 (표준 MM)" and enzyme_conc_input is not None and enzyme_conc_input > 0:
+                if experiment_type == "Substrate Concentration Variation (Standard MM)" and enzyme_conc_input is not None and enzyme_conc_input > 0:
                     enzyme_conc = enzyme_conc_input
                 
                 # 2) xlsx 파일에서 읽기 시도 (사용자 입력값이 없을 때만)
@@ -848,7 +856,7 @@ def data_load_mode(st):
                     kcat = Vmax / enzyme_conc
                 else:
                     kcat = None
-                    if experiment_type == "Substrate 농도 변화 (표준 MM)" and mm_fit_success and Vmax is not None:
+                    if experiment_type == "Substrate Concentration Variation (Standard MM)" and mm_fit_success and Vmax is not None:
                         st.sidebar.warning("⚠️ kcat 계산을 위해 Enzyme 농도를 입력해주세요.")
                 
                 # MM 피팅 결과를 별도로 저장
@@ -940,7 +948,7 @@ def data_load_mode(st):
                 norm_enzyme_conc = None
                 
                 # 1) 사용자 입력값 확인
-                if experiment_type == "Substrate 농도 변화 (표준 MM)" and enzyme_conc_input is not None and enzyme_conc_input > 0:
+                if experiment_type == "Substrate Concentration Variation (Standard MM)" and enzyme_conc_input is not None and enzyme_conc_input > 0:
                     norm_enzyme_conc = enzyme_conc_input
                 
                 # 2) xlsx 파일에서 읽기 시도 (사용자 입력값이 없을 때만)
@@ -1116,7 +1124,7 @@ def data_load_mode(st):
                 mm_fit = results['mm_fit_results']
                 exp_type = mm_fit.get('experiment_type', 'Substrate Concentration Variation (Standard MM)')
                 
-                if is_substrate_experiment(exp_type):
+                if exp_type == "Substrate Concentration Variation (Standard MM)":
                     # 표준 MM 결과 표시 (Substrate는 μM 단위)
                     col1, col2, col3, col4 = st.columns(4)
                     with col1:
@@ -1162,10 +1170,10 @@ def data_load_mode(st):
                 st.warning("⚠️ MM 피팅 실패 또는 데이터 부족")
             
             # 탭 구성 (st.tabs 대신 st.radio를 사용하여 상태 제어)
-            exp_type = results.get('mm_fit_results', {}).get('experiment_type', 'Substrate 농도 변화 (표준 MM)')
+            exp_type = results.get('mm_fit_results', {}).get('experiment_type', 'Substrate Concentration Variation (Standard MM)')
             
             tab_titles = []
-            if is_substrate_experiment(exp_type):
+            if exp_type == "Substrate Concentration Variation (Standard MM)":
                 tab_titles = ["📊 Experimental Results", "🔄 Normalization", "📊 v₀ vs [S] Fit", "📋 Data Table"]
             else:
                 tab_titles = ["📊 Experimental Results", "🔄 Normalization", "📊 v₀ vs [E] Linear Fit", "📋 Data Table"]
@@ -1233,7 +1241,7 @@ def data_load_mode(st):
                     if conc_match:
                         conc_value = float(conc_match.group(1))
                         # 실험 타입에 따라 단위 결정
-                        if is_substrate_experiment(exp_type):
+                        if exp_type == "Substrate Concentration Variation (Standard MM)":
                             legend_name = f"{conc_value} μM"
                         else:  # Enzyme 농도 변화
                             legend_name = f"{conc_value} μg/mL"
@@ -1262,7 +1270,7 @@ def data_load_mode(st):
                         if raw_conc_data.get('SD') is not None:
                             sd_values = raw_conc_data['SD']
                             # 실험 타입에 따라 조건부 표시
-                            if not is_substrate_experiment(exp_type):
+                            if exp_type == "Enzyme 농도 변화 (Substrate 고정)":
                                 # Enzyme 조건: SD가 0이 아닌 값이 하나라도 있으면 표시
                                 if isinstance(sd_values, (list, np.ndarray)):
                                     has_nonzero_sd = np.any(np.array(sd_values) > 0)
@@ -1336,14 +1344,14 @@ def data_load_mode(st):
                             st.session_state['normalization_selected_conc_idx'] = 0
                         
                         # 실험 타입에 따라 단위 변환 로직
-                        exp_type = results.get('mm_fit_results', {}).get('experiment_type', 'Substrate 농도 변화 (표준 MM)')
+                        exp_type = results.get('mm_fit_results', {}).get('experiment_type', 'Substrate Concentration Variation (Standard MM)')
                         
                         # 미리 포맷팅된 옵션 리스트 생성
                         formatted_options = []
                         for i in range(len(conc_order)):
                             conc_name = conc_order[i]
                             conc_value = norm_results[conc_name]['concentration']
-                            if is_substrate_experiment(exp_type):
+                            if exp_type == "Substrate Concentration Variation (Standard MM)":
                                 formatted_options.append(f"{conc_value} μM")
                             else:
                                 formatted_options.append(f"{conc_value} μg/mL")
@@ -1780,12 +1788,23 @@ def data_load_mode(st):
                         # 방정식 및 R² 테이블
                         st.subheader("정규화 파라미터")
                         # 실험 타입에 따라 농도 단위 결정
-                        exp_type = results.get('mm_fit_results', {}).get('experiment_type', 'Substrate 농도 변화 (표준 MM)')
+                        exp_type = results.get('mm_fit_results', {}).get('experiment_type', 'Substrate Concentration Variation (Standard MM)')
                         conc_value = norm_data['concentration']
-                        if is_substrate_experiment(exp_type):
+                        if exp_type == "Substrate Concentration Variation (Standard MM)":
                             conc_display = f"{conc_value} μM"
                         else:  # Enzyme 농도 변화
                             conc_display = f"{conc_value} μg/mL"
+                        
+                        # 구간 경계 시간 계산
+                        tau = norm_data.get('tau', None)
+                        if tau is not None and not np.isinf(tau) and tau > 0:
+                            t_initial_exponential = 0.1 * tau  # 초기-exponential 경계
+                            t_exponential_plateau = 3.0 * tau  # exponential-plateau 경계
+                            t_initial_exponential_str = f"{t_initial_exponential:.4f}"
+                            t_exponential_plateau_str = f"{t_exponential_plateau:.4f}"
+                        else:
+                            t_initial_exponential_str = "N/A"
+                            t_exponential_plateau_str = "N/A"
                         
                         param_data = {
                             '농도': [conc_display],
@@ -1793,6 +1812,8 @@ def data_load_mode(st):
                             'F_max': [f"{norm_data['Fmax']:.4f}"],
                             'k_obs': [f"{norm_data['k_obs']:.4f}" if norm_data['k_obs'] is not None else "N/A"],
                             'τ (1/k_obs)': [f"{norm_data['tau']:.4f}" if norm_data['tau'] is not None and not np.isinf(norm_data['tau']) else "N/A"],
+                            '초기→지수 (t=0.1τ)': [t_initial_exponential_str],
+                            '지수→Plateau (t=3τ)': [t_exponential_plateau_str],
                             'v₀ (RFU/min)': [f"{v0:.2f}" if v0 is not None else "N/A"],
                             'R²': [f"{norm_data['R_squared']:.4f}"],
                             '방정식': [norm_data['equation']]
@@ -1809,7 +1830,7 @@ def data_load_mode(st):
                             v0_conc = n_data['k_obs'] * (n_data['Fmax'] - n_data['F0']) if n_data['k_obs'] is not None else None
                             # 농도 표시 (실험 타입에 따라 단위 변환)
                             conc_value = n_data['concentration']
-                            if is_substrate_experiment(exp_type):
+                            if exp_type == "Substrate Concentration Variation (Standard MM)":
                                 conc_display = f"{conc_value} μM"
                             else:  # Enzyme 농도 변화
                                 conc_display = f"{conc_value} μg/mL"
@@ -1826,16 +1847,16 @@ def data_load_mode(st):
                                 alpha_range_str = "N/A"
                                 alpha_mean_str = "N/A"
                             
-                            # 초기구간과 Plateau 구간 세로선 시간 계산
-                            tau = n_data['tau']
-                            if tau is not None and not np.isinf(tau) and tau > 0:
-                                t_initial = 0.1 * tau  # 초기 구간: t ≤ 0.1τ
-                                t_plateau = 3.0 * tau  # Plateau 구간: t ≥ 3τ
-                                t_initial_str = f"{t_initial:.4f}"
-                                t_plateau_str = f"{t_plateau:.4f}"
+                            # 구간 경계 시간 계산
+                            tau_conc = n_data.get('tau', None)
+                            if tau_conc is not None and not np.isinf(tau_conc) and tau_conc > 0:
+                                t_initial_exponential_conc = 0.1 * tau_conc  # 초기-exponential 경계
+                                t_exponential_plateau_conc = 3.0 * tau_conc  # exponential-plateau 경계
+                                t_initial_exponential_str_conc = f"{t_initial_exponential_conc:.4f}"
+                                t_exponential_plateau_str_conc = f"{t_exponential_plateau_conc:.4f}"
                             else:
-                                t_initial_str = "N/A"
-                                t_plateau_str = "N/A"
+                                t_initial_exponential_str_conc = "N/A"
+                                t_exponential_plateau_str_conc = "N/A"
                             
                             summary_data.append({
                                 '농도': conc_display,
@@ -1843,8 +1864,8 @@ def data_load_mode(st):
                                 'F_max': f"{n_data['Fmax']:.4f}",
                                 'k_obs': f"{n_data['k_obs']:.4f}" if n_data['k_obs'] is not None else "N/A",
                                 'τ': f"{n_data['tau']:.4f}" if n_data['tau'] is not None and not np.isinf(n_data['tau']) else "N/A",
-                                '초기구간 시간 (0.1τ)': t_initial_str,
-                                'Plateau 구간 시간 (3τ)': t_plateau_str,
+                                '초기→지수 (t=0.1τ)': t_initial_exponential_str_conc,
+                                '지수→Plateau (t=3τ)': t_exponential_plateau_str_conc,
                                 'v₀ (RFU/min)': f"{v0_conc:.2f}" if v0_conc is not None else "N/A",
                                 'α 범위': alpha_range_str,
                                 'α 평균': alpha_mean_str,
@@ -1858,12 +1879,12 @@ def data_load_mode(st):
                     st.info("정규화 결과가 없습니다. 먼저 'Michaelis-Menten Model 실행' 버튼을 클릭해주세요.")
             
             # Tab 2: v₀ vs 농도 그래프 (실험 조건에 따라 다름)
-            v0_tab_idx = 2 if is_substrate_experiment(exp_type) else 2
+            v0_tab_idx = 2 if exp_type == "Substrate Concentration Variation (Standard MM)" else 2
             if selected_tab == tab_titles[v0_tab_idx]:
                 if 'v0_vs_concentration' in results and 'mm_fit_results' in results:
                     v0_data = results['v0_vs_concentration']
                     mm_fit = results['mm_fit_results']
-                    exp_type = mm_fit.get('experiment_type', 'Substrate 농도 변화 (표준 MM)')
+                    exp_type = mm_fit.get('experiment_type', 'Substrate Concentration Variation (Standard MM)')
                     
                     fig_v0 = go.Figure()
                     
@@ -1876,7 +1897,7 @@ def data_load_mode(st):
                         marker=dict(size=10, color='red', line=dict(width=2, color='black'))
                     ))
                     
-                    if is_substrate_experiment(exp_type):
+                    if exp_type == "Substrate Concentration Variation (Standard MM)":
                         st.subheader("v₀ vs [S] Michaelis-Menten Fit")
                         
                         # 실험 데이터 테이블 (expander)
@@ -1998,7 +2019,7 @@ def data_load_mode(st):
                     st.warning("v₀ vs 농도 데이터가 없습니다.")
             
             # 마지막 탭: 데이터 테이블
-            data_tab_idx = 3 if is_substrate_experiment(exp_type) else 3
+            data_tab_idx = 3 if exp_type == "Substrate Concentration Variation (Standard MM)" else 3
             if selected_tab == tab_titles[data_tab_idx]:
                 st.subheader("상세 파라미터")
                 
@@ -2019,7 +2040,7 @@ def data_load_mode(st):
                             v0_norm = norm_data['k_obs'] * (norm_data['Fmax'] - norm_data['F0'])
                         
                         # 실험 타입에 따라 농도 단위 결정
-                        if is_substrate_experiment(exp_type):
+                        if exp_type == "Substrate Concentration Variation (Standard MM)":
                             conc_col_name = 'Concentration [μM]'
                         else:
                             conc_col_name = 'Concentration [ug/mL]'
@@ -2057,7 +2078,7 @@ def data_load_mode(st):
                 st.subheader("MM Fit 결과")
                 if 'mm_fit_results' in results and results['mm_fit_results'].get('fit_success'):
                     mm_fit = results['mm_fit_results']
-                    if is_substrate_experiment(exp_type):
+                    if exp_type == "Substrate Concentration Variation (Standard MM)":
                         mm_fit_data = {
                             '파라미터': ['Vmax', 'Km (μM)', 'kcat', 'R²'],
                             '값': [
@@ -2132,7 +2153,7 @@ def data_load_mode(st):
                                     if v0_conc == 0 and n_data.get('k_obs') is not None:
                                         v0_conc = n_data['k_obs'] * (n_data['Fmax'] - n_data['F0'])
                                     
-                                    if is_substrate_experiment(exp_type):
+                                    if exp_type == "Substrate Concentration Variation (Standard MM)":
                                         conc_display = f"{conc_value} μM"
                                     else:
                                         conc_display = f"{conc_value} μg/mL"
@@ -2155,7 +2176,7 @@ def data_load_mode(st):
                             # MM Fit 결과 시트 추가
                             if 'mm_fit_results' in results and results['mm_fit_results'].get('fit_success'):
                                 mm_fit = results['mm_fit_results']
-                                if is_substrate_experiment(exp_type):
+                                if exp_type == "Substrate Concentration Variation (Standard MM)":
                                     mm_fit_data = {
                                         '파라미터': ['Vmax', 'Km (μM)', 'kcat', 'R²', '방정식'],
                                         '값': [

@@ -2416,11 +2416,13 @@ def data_load_mode(st):
                         with zipfile.ZipFile(zip_buffer, 'w', zipfile.ZIP_DEFLATED) as zf:
                             for name, fig in fig_list:
                                 try:
-                                    img_bytes = fig.to_image(format="png", scale=2)
+                                    img_bytes = fig.to_image(format="png", scale=2, engine="kaleido")
                                     zf.writestr(f"{name}.png", img_bytes)
                                 except Exception as img_err:
-                                    # kaleido 미설치 등으로 to_image 실패 시 스킵 (메인 영역 하단에 표시)
-                                    st.warning(f"이미지 생성 실패 ({name}): {img_err}")
+                                    err_msg = str(img_err)
+                                    if "kaleido" in err_msg.lower():
+                                        err_msg += " kaleido 설치 후에는 Streamlit 앱을 한 번 종료했다가 다시 실행해주세요."
+                                    st.warning(f"이미지 생성 실패 ({name}): {err_msg}")
                         zip_buffer.seek(0)
                         zip_bytes = zip_buffer.getvalue()
                         if zip_bytes:
@@ -2433,7 +2435,7 @@ def data_load_mode(st):
                                 help="Experimental Results, Normalization, Linear fit 등 분석에서 생성된 모든 그래프를 PNG로 저장한 ZIP 파일입니다."
                             )
                         else:
-                            st.caption("이미지 생성에 실패했습니다. kaleido 패키지가 설치되어 있는지 확인해주세요.")
+                            st.caption("이미지 생성에 실패했습니다. kaleido 설치 후 Streamlit 앱을 재시작해주세요. (pip install -U kaleido)")
                     except Exception as zip_err:
                         st.warning(f"이미지 ZIP 준비 중 오류: {zip_err}")
 

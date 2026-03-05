@@ -38,6 +38,12 @@ from data_interpolation_mode.interpolate_prism import (
 )
 from scipy.optimize import curve_fit
 
+# kaleido를 앱 시작 시 로드 (이미지 ZIP 내보내기용; Windows 등에서 인식 문제 방지)
+try:
+    import kaleido  # noqa: F401
+except ImportError:
+    kaleido = None
+
 
 def detect_lines_and_points(image_array):
     """
@@ -2609,25 +2615,51 @@ def data_load_mode(st):
                     except Exception as e:
                         st.warning(f"Error preparing XLSX download: {e}")
                 
-                # 모든 분석 이미지 ZIP 다운로드 (투명 PNG)
+                # 모든 분석 이미지 ZIP 다운로드 (PNG만, 카메라 버튼과 같은 비율로 내보냄)
                 with col2:
                     try:
                         import zipfile
+                        import tempfile
                         from io import BytesIO
+                        # 화면/카메라 버튼과 같은 비율 (가로 800 x 세로 600)
+                        _export_png_width, _export_png_height = 800, 600
                         fig_list = _build_all_export_figures(results)
                         zip_buffer = BytesIO()
+                        png_ok = True
+
+                        def _export_fig_to_png(fig):
+                            """지정 비율로 PNG 바이트 반환. 실패 시 None."""
+                            fig = go.Figure(fig)
+                            fig.update_layout(width=_export_png_width, height=_export_png_height)
+                            tmp = tempfile.NamedTemporaryFile(suffix=".png", delete=False)
+                            fpath = tmp.name
+                            tmp.close()
+                            try:
+                                try:
+                                    fig.write_image(fpath, format="png", scale=2, engine="kaleido")
+                                except Exception:
+                                    fig.write_image(fpath, format="png", scale=2)
+                                with open(fpath, "rb") as f:
+                                    return f.read()
+                            except Exception:
+                                return None
+                            finally:
+                                if os.path.exists(fpath):
+                                    try:
+                                        os.unlink(fpath)
+                                    except OSError:
+                                        pass
+
                         with zipfile.ZipFile(zip_buffer, 'w', zipfile.ZIP_DEFLATED) as zf:
                             for name, fig in fig_list:
-                                try:
-                                    img_bytes = fig.to_image(format="png", scale=2, engine="kaleido")
+                                img_bytes = _export_fig_to_png(fig)
+                                if img_bytes is not None:
                                     zf.writestr(f"{name}.png", img_bytes)
-                                except Exception as img_err:
-                                    err_msg = str(img_err)
-                                    if "kaleido" in err_msg.lower() or "chrome" in err_msg.lower():
-                                        err_msg += " → Chrome not required. Run 'pip install -U kaleido' in the terminal, then restart the Streamlit app. (kaleido 0.2+ works without Chrome.)"
-                                    st.warning(f"Image generation failed ({name}): {err_msg}")
+                                else:
+                                    png_ok = False
+                                    break
                         zip_buffer.seek(0)
-                        zip_bytes = zip_buffer.getvalue()
+                        zip_bytes = zip_buffer.getvalue() if png_ok else b""
                         if zip_bytes:
                             st.download_button(
                                 label="📥 모든 이미지 저장 (ZIP)",
@@ -2635,10 +2667,14 @@ def data_load_mode(st):
                                 file_name="analysis_figures.zip",
                                 mime="application/zip",
                                 use_container_width=True,
-                                help="Experimental Results, Normalization, Linear fit 등 분석에서 생성된 모든 그래프를 PNG로 저장한 ZIP 파일입니다."
+                                help="모든 그래프를 PNG로 저장한 ZIP입니다. 비율은 화면의 카메라 버튼으로 저장할 때와 동일(800×600)합니다."
                             )
                         else:
-                            st.caption("Image generation failed. Install kaleido and restart the Streamlit app. (pip install -U kaleido)")
+                            st.info(
+                                "**PNG batch export (ZIP)** requires the kaleido package. "
+                                "You can save each plot as PNG at the same aspect ratio using the **camera button (📷)** on each graph. "
+                                "For a single ZIP download, run `pip install -U kaleido` in the same environment where Streamlit runs, then restart the app."
+                            )
                     except Exception as zip_err:
                         st.warning(f"Error preparing image ZIP: {zip_err}")
 

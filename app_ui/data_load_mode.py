@@ -202,6 +202,190 @@ def exponential_fit_simple(t, F_max, k_obs):
     return F_max * (1 - np.exp(-k_obs * t))
 
 
+def _conc_to_export_label(conc_value, exp_type):
+    """Export용 파일명 라벨 (예: 0.3125ugmL, 10uM)."""
+    if exp_type == "Substrate Concentration Variation (Standard MM)":
+        return re.sub(r'[^\w.]', '', f"{conc_value}uM")
+    return re.sub(r'[^\w.]', '', f"{conc_value}ugmL")
+
+
+def _build_experimental_fig(results):
+    """Experimental Results 탭과 동일한 figure 생성 (export용)."""
+    exp_type = results.get('mm_fit_results', {}).get('experiment_type', 'Substrate Concentration Variation (Standard MM)')
+    fig = go.Figure()
+    colors = ['blue', 'red', 'orange', 'green', 'purple', 'brown', 'pink', 'gray', 'olive', 'cyan']
+    conc_col = None
+    for col in ['Concentration [μM]', 'Concentration [ug/mL]']:
+        if col in results['mm_results_df'].columns:
+            conc_col = col
+            break
+    conc_order = results['mm_results_df'].sort_values(conc_col)['Concentration'].tolist() if conc_col else results['mm_results_df']['Concentration'].tolist()
+    for idx, conc_name in enumerate(conc_order):
+        color = colors[idx % len(colors)]
+        conc_match = re.search(r'(\d+\.?\d*)', conc_name)
+        legend_name = f"{float(conc_match.group(1))} μM" if conc_match and "Substrate" in exp_type else (f"{float(conc_match.group(1))} μg/mL" if conc_match else conc_name)
+        if 'raw_data' in results and conc_name in results['raw_data']:
+            raw_conc_data = results['raw_data'][conc_name]
+            fig.add_trace(go.Scatter(
+                x=raw_conc_data['time'], y=raw_conc_data['value'],
+                mode='markers', name=legend_name,
+                marker=dict(size=8, color=color, symbol='circle', line=dict(width=1, color='white')),
+                legendgroup=conc_name, showlegend=True
+            ))
+    fig.update_layout(
+        xaxis_title='Time (min)', yaxis_title='RFU', height=600, template='plotly_white',
+        plot_bgcolor='rgba(0,0,0,0)', paper_bgcolor='rgba(0,0,0,0)', hovermode='x unified',
+        legend=dict(orientation="v", yanchor="bottom", y=0.05, xanchor="right", x=0.99,
+                   bgcolor="rgba(0,0,0,0)", bordercolor="rgba(0,0,0,0)", borderwidth=0, font=dict(color="black"))
+    )
+    fig.update_xaxes(range=[results['x_data_min'], results['x_data_max']])
+    fig.update_yaxes(rangemode='tozero')
+    return fig
+
+
+def _build_norm_fig_full(norm_data, exp_type):
+    """정규화 곡선 figure (전체 시간 범위, export용)."""
+    t_min = norm_data['times'].min()
+    t_max = norm_data['times'].max()
+    v0 = norm_data['k_obs'] * (norm_data['Fmax'] - norm_data['F0']) if norm_data.get('k_obs') else None
+    v0_label = f"Initial linear region (v₀={v0:.2f} RFU/min)" if v0 is not None else "Initial linear region"
+    fig = go.Figure()
+    if norm_data.get('k_obs') and norm_data['k_obs'] > 0:
+        t_fit = np.linspace(t_min, t_max, 200)
+        fit_curve = exponential_fit_simple(t_fit, 1.0, norm_data['k_obs'])
+        fig.add_trace(go.Scatter(x=t_fit, y=fit_curve, mode='lines', name='Exponential increase (Full kinetics)', line=dict(color='orange', width=2.5)))
+        linear_curve = norm_data['k_obs'] * t_fit
+        fig.add_trace(go.Scatter(x=t_fit, y=linear_curve, mode='lines', name=v0_label, line=dict(color='lightblue', width=2.5, dash='dash')))
+        tau = norm_data.get('tau')
+        if tau and not np.isinf(tau) and tau > 0:
+            t_initial, t_exponential_end, t_plateau = 0.1 * tau, 3.0 * tau, 3.0 * tau
+            if t_initial <= t_max:
+                fig.add_vline(x=t_initial, line_dash="dash", line_color="orange")
+            if t_exponential_end <= t_max:
+                fig.add_vline(x=0.1 * tau, line_dash="dash", line_color="purple")
+                fig.add_vline(x=t_exponential_end, line_dash="dash", line_color="purple")
+            if t_plateau <= t_max:
+                fig.add_vline(x=t_plateau, line_dash="dash", line_color="brown")
+    fig.add_trace(go.Scatter(x=norm_data['times'], y=norm_data['normalized_values'], mode='markers', name='Normalized data', marker=dict(size=6, color='blue')))
+    fig.update_layout(
+        xaxis_title='Time (min)', yaxis_title='Fluorescence intensity (a.u.)',
+        title='Enzyme-quenched peptide fluorescence kinetics', height=600, template='plotly_white',
+        plot_bgcolor='rgba(0,0,0,0)', paper_bgcolor='rgba(0,0,0,0)', hovermode='x unified',
+        yaxis=dict(range=[0, 1.20]), xaxis=dict(range=[t_min, t_max]),
+        legend=dict(orientation="v", yanchor="bottom", y=0.05, xanchor="right", x=0.99, bgcolor="rgba(0,0,0,0)", bordercolor="rgba(0,0,0,0)", borderwidth=0)
+    )
+    return fig
+
+
+def _build_norm_fig_uptoy1(norm_data, exp_type):
+    """정규화 곡선 figure (y=1 도달 구간만, export용). 조건 미충족 시 None."""
+    if not norm_data.get('k_obs') or norm_data['k_obs'] <= 0:
+        return None
+    tau_scaled = norm_data.get('tau')
+    if not tau_scaled or np.isinf(tau_scaled) or tau_scaled <= 0:
+        return None
+    t_min = norm_data['times'].min()
+    t_max = norm_data['times'].max()
+    normalized_values = norm_data['normalized_values']
+    times_norm = norm_data['times']
+    target_value = 0.99
+    t_y1 = None
+    for i, val in enumerate(normalized_values):
+        if val >= target_value:
+            t_y1 = times_norm[i]
+            break
+    if t_y1 is None:
+        t_y1 = -np.log(1 - target_value) / norm_data['k_obs']
+    t_display_max = t_y1
+    v0 = norm_data['k_obs'] * (norm_data['Fmax'] - norm_data['F0'])
+    v0_label = f"Initial linear region (v₀={v0:.2f} RFU/min)" if v0 else "Initial linear region"
+    fig = go.Figure()
+    t_fit_scaled = np.linspace(t_min, t_display_max, 200)
+    fit_curve_scaled = exponential_fit_simple(t_fit_scaled, 1.0, norm_data['k_obs'])
+    fig.add_trace(go.Scatter(x=t_fit_scaled, y=fit_curve_scaled, mode='lines', name='Exponential increase (Full kinetics)', line=dict(color='orange', width=2.5)))
+    linear_curve_scaled = norm_data['k_obs'] * t_fit_scaled
+    fig.add_trace(go.Scatter(x=t_fit_scaled, y=linear_curve_scaled, mode='lines', name=v0_label, line=dict(color='lightblue', width=2.5, dash='dash')))
+    t_initial_scaled, t_exponential_end_scaled, t_plateau_scaled = 0.1 * tau_scaled, 3.0 * tau_scaled, 3.0 * tau_scaled
+    if t_initial_scaled <= t_display_max:
+        fig.add_vline(x=t_initial_scaled, line_dash="dash", line_color="orange")
+    if t_exponential_end_scaled <= t_display_max:
+        fig.add_vline(x=0.1 * tau_scaled, line_dash="dash", line_color="purple")
+        fig.add_vline(x=t_exponential_end_scaled, line_dash="dash", line_color="purple")
+    if t_plateau_scaled <= t_display_max:
+        fig.add_vline(x=t_plateau_scaled, line_dash="dash", line_color="brown")
+    fig.add_trace(go.Scatter(x=norm_data['times'], y=norm_data['normalized_values'], mode='markers', name='Normalized data', marker=dict(size=6, color='blue')))
+    fig.update_layout(
+        xaxis_title='Time (min)', yaxis_title='Fluorescence intensity (a.u.)',
+        title='Enzyme-quenched peptide fluorescence kinetics (up to y=1)', height=600, template='plotly_white',
+        plot_bgcolor='rgba(0,0,0,0)', paper_bgcolor='rgba(0,0,0,0)', hovermode='x unified',
+        yaxis=dict(range=[0, 1.20]), xaxis=dict(range=[t_min, t_display_max]),
+        legend=dict(orientation="v", yanchor="bottom", y=0.05, xanchor="right", x=0.99, bgcolor="rgba(0,0,0,0)", bordercolor="rgba(0,0,0,0)", borderwidth=0)
+    )
+    return fig
+
+
+def _build_v0_fig(results):
+    """v₀ vs 농도 / Linear fit figure (export용)."""
+    v0_data = results['v0_vs_concentration']
+    mm_fit = results['mm_fit_results']
+    exp_type = mm_fit.get('experiment_type', 'Substrate Concentration Variation (Standard MM)')
+    fig = go.Figure()
+    fig.add_trace(go.Scatter(
+        x=v0_data['concentrations'], y=v0_data['v0_values'],
+        mode='markers', name='Experimental v₀',
+        marker=dict(size=10, color='red', line=dict(width=2, color='black'))
+    ))
+    if exp_type == "Substrate Concentration Variation (Standard MM)" and mm_fit.get('fit_success') and mm_fit.get('Vmax') is not None and mm_fit.get('Km') is not None:
+        conc_min, conc_max = min(v0_data['concentrations']), max(v0_data['concentrations'])
+        conc_range = np.linspace(conc_min * 0.5, conc_max * 1.5, 200)
+        v0_fitted = michaelis_menten_calibration(conc_range, mm_fit['Vmax'], mm_fit['Km'])
+        fig.add_trace(go.Scatter(x=conc_range, y=v0_fitted, mode='lines', name=mm_fit.get('equation', ''), line=dict(width=2.5, color='blue')))
+        fig.update_layout(
+            title='Initial Velocity (v₀) vs Substrate Concentration [S]',
+            xaxis_title='[S] (μM)', yaxis_title='Initial Velocity v₀ (Fluorescence Units / Time)',
+            template='plotly_white', height=600, hovermode='x unified',
+            plot_bgcolor='rgba(0,0,0,0)', paper_bgcolor='rgba(0,0,0,0)'
+        )
+    else:
+        if mm_fit.get('fit_success') and mm_fit.get('slope') is not None:
+            conc_min, conc_max = min(v0_data['concentrations']), max(v0_data['concentrations'])
+            conc_range = np.linspace(conc_min * 0.5, conc_max * 1.5, 200)
+            slope = mm_fit['slope']
+            intercept = mm_fit.get('intercept', 0)
+            v0_fitted = slope * conc_range + intercept
+            fig.add_trace(go.Scatter(x=conc_range, y=v0_fitted, mode='lines', name=f'Linear Fit: {mm_fit.get("equation", "")}', line=dict(width=2.5, color='blue', dash='dash')))
+        fig.update_layout(
+            title='Initial Velocity (v₀) vs Enzyme Concentration [E] (Substrate 고정)',
+            xaxis_title='[E] (μg/mL)', yaxis_title='Initial Velocity v₀ (Fluorescence Units / Time)',
+            template='plotly_white', height=600, hovermode='x unified',
+            plot_bgcolor='rgba(0,0,0,0)', paper_bgcolor='rgba(0,0,0,0)'
+        )
+    return fig
+
+
+def _build_all_export_figures(results):
+    """분석에서 생성되는 모든 figure를 (파일명_접미사제외, fig) 리스트로 반환."""
+    out = []
+    exp_type = results.get('mm_fit_results', {}).get('experiment_type', 'Substrate Concentration Variation (Standard MM)')
+    out.append(("Experimental_Results", _build_experimental_fig(results)))
+    if 'normalization_results' in results and results['normalization_results']:
+        norm_results = results['normalization_results']
+        conc_order = sorted(norm_results.keys(), key=lambda x: norm_results[x]['concentration'])
+        for conc_name in conc_order:
+            norm_data = norm_results[conc_name]
+            conc_label = _conc_to_export_label(norm_data['concentration'], exp_type)
+            out.append((f"Normalization_{conc_label}", _build_norm_fig_full(norm_data, exp_type)))
+            fig_scaled = _build_norm_fig_uptoy1(norm_data, exp_type)
+            if fig_scaled is not None:
+                out.append((f"Normalization_to_plateau_{conc_label}", fig_scaled))
+    if 'v0_vs_concentration' in results and results.get('mm_fit_results', {}).get('fit_success'):
+        if exp_type == "Substrate Concentration Variation (Standard MM)":
+            out.append(("v0_vs_S_Fit", _build_v0_fig(results)))
+        else:
+            out.append(("Linear_fit", _build_v0_fig(results)))
+    return out
+
+
 def normalize_iterative(times, values, num_iterations=2):
     """
     반복 정규화 수행
@@ -379,12 +563,12 @@ def data_load_mode(st):
     # Determine sample file path based on experiment type
     if experiment_type == "Substrate Concentration Variation (Standard MM)":
         sample_file_path = "raw/raw_substrate.csv"
-        sample_file_name = "raw_substrate_sample.csv"
-        sample_file_label = "Download Sample raw_substrate.csv"
+        sample_file_name = "raw_substrate_sample.xlsx"
+        sample_file_label = "Download Sample raw_substrate.xlsx"
     else:  # Enzyme Concentration Variation (Substrate Fixed)
         sample_file_path = "raw/raw_enzyme.csv"
-        sample_file_name = "raw_enzyme_sample.csv"
-        sample_file_label = "Download Sample raw_enzyme.csv"
+        sample_file_name = "raw_enzyme_sample.xlsx"
+        sample_file_label = "Download Sample raw_enzyme.xlsx"
     
     # CSV/XLSX file upload
     st.sidebar.subheader("📁 Data File Upload")
@@ -394,15 +578,19 @@ def data_load_mode(st):
         help="prep_raw.csv/xlsx format: Time, concentration values, SD, replicates (3 columns each)"
     )
     
-    # 샘플 데이터 다운로드 (실험 타입에 따라 다른 파일)
+    # 샘플 데이터 다운로드 (XLSX 형태로 제공, 실험 타입에 따라 다른 파일)
     try:
-        with open(sample_file_path, "rb") as f:
-            sample_bytes = f.read()
+        import io
+        df_sample = pd.read_csv(sample_file_path, header=None, sep='\t')
+        output = io.BytesIO()
+        with pd.ExcelWriter(output, engine='openpyxl') as writer:
+            df_sample.to_excel(writer, index=False, header=False, sheet_name='Sheet1')
+        sample_bytes = output.getvalue()
         st.sidebar.download_button(
             label=sample_file_label,
             data=sample_bytes,
             file_name=sample_file_name,
-            mime="text/csv"
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
         )
     except Exception:
         pass
@@ -1106,7 +1294,8 @@ def data_load_mode(st):
                     'v0_values': norm_v0_list  # 정규화 기반 v0
                 },
                 'experiment_type': experiment_type,
-                'normalization_results': normalization_results  # 정규화 결과 추가
+                'normalization_results': normalization_results,  # 정규화 결과 추가
+                'uploaded_filename': uploaded_file.name if uploaded_file is not None else None  # 다운로드 파일명용
             }
             
             # 결과 적용 플래그 설정
@@ -2114,20 +2303,8 @@ def data_load_mode(st):
                     available_cols = [col for col in detail_cols if col in results['mm_results_df'].columns]
                     download_df = results['mm_results_df'][available_cols]
                 
-                # MM Results CSV 다운로드
-                with col1:
-                    mm_results_csv = download_df.to_csv(index=False)
-                    st.download_button(
-                        label="📥 MM Results 다운로드 (CSV)",
-                        data=mm_results_csv,
-                        file_name="MM_Results.csv",
-                        mime="text/csv",
-                        use_container_width=True,
-                        help="MM Results 시트의 데이터를 CSV 파일로 다운로드합니다."
-                    )
-                
                 # XLSX 다운로드 버튼 및 자동 저장
-                with col2:
+                with col1:
                     try:
                         from io import BytesIO
                         output = BytesIO()
@@ -2203,6 +2380,14 @@ def data_load_mode(st):
                         output.seek(0)
                         xlsx_data = output.getvalue()
                         
+                        # 다운로드 파일명: 업로드 파일이 raw_* 이면 result_*.xlsx 로 저장
+                        uploaded_filename = results.get('uploaded_filename') or ''
+                        if uploaded_filename.startswith('raw_'):
+                            base = 'result_' + uploaded_filename[4:].rsplit('.', 1)[0]
+                            xlsx_download_name = base + '.xlsx'
+                        else:
+                            xlsx_download_name = 'Michaelis-Menten_calibration_results.xlsx'
+                        
                         # XLSX 파일 자동 저장 (Analysis 모드에서 자동 로드용)
                         try:
                             with open('Michaelis-Menten_calibration_results.xlsx', 'wb') as f:
@@ -2213,11 +2398,42 @@ def data_load_mode(st):
                         st.download_button(
                             label="📥 전체 결과 다운로드 (XLSX)",
                             data=xlsx_data,
-                            file_name="Michaelis-Menten_calibration_results.xlsx",
+                            file_name=xlsx_download_name,
                             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
                             use_container_width=True,
                             help="MM Results, Normalization Results, MM Fit Results, Michaelis-Menten Curves 시트를 포함한 전체 엑셀 파일입니다."
                         )
                     except Exception as e:
                         st.warning(f"XLSX 다운로드 준비 중 오류: {e}")
+                
+                # 모든 분석 이미지 ZIP 다운로드 (투명 PNG)
+                with col2:
+                    try:
+                        import zipfile
+                        from io import BytesIO
+                        fig_list = _build_all_export_figures(results)
+                        zip_buffer = BytesIO()
+                        with zipfile.ZipFile(zip_buffer, 'w', zipfile.ZIP_DEFLATED) as zf:
+                            for name, fig in fig_list:
+                                try:
+                                    img_bytes = fig.to_image(format="png", scale=2, transparent=True)
+                                    zf.writestr(f"{name}.png", img_bytes)
+                                except Exception as img_err:
+                                    # kaleido 미설치 등으로 to_image 실패 시 스킵
+                                    st.sidebar.warning(f"이미지 생성 실패 ({name}): {img_err}")
+                        zip_buffer.seek(0)
+                        zip_bytes = zip_buffer.getvalue()
+                        if zip_bytes:
+                            st.download_button(
+                                label="📥 모든 이미지 저장 (ZIP)",
+                                data=zip_bytes,
+                                file_name="analysis_figures.zip",
+                                mime="application/zip",
+                                use_container_width=True,
+                                help="Experimental Results, Normalization, Linear fit 등 분석에서 생성된 모든 그래프를 PNG로 저장한 ZIP 파일입니다."
+                            )
+                        else:
+                            st.caption("이미지 생성에 실패했습니다. kaleido 패키지가 설치되어 있는지 확인해주세요.")
+                    except Exception as zip_err:
+                        st.warning(f"이미지 ZIP 준비 중 오류: {zip_err}")
 

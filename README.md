@@ -2,22 +2,92 @@
 
 단백질 분해 효소(Protease) 반응 시뮬레이션 및 데이터 분석 도구입니다.
 
-## 주요 기능
+---
 
-*   **Data Load 모드**: 실험 데이터(CSV/XLSX) 로드 및 전처리
-    *   Substrate 농도 변화 및 Enzyme 농도 변화 실험 지원
-    *   Michaelis-Menten 모델 피팅 및 초기 속도(v0) 계산
-    *   데이터 보간(Interpolation) 및 정규화(Normalization)
-*   **General Analysis 모드**: 분석된 데이터 시각화 및 비교 분석
-*   **Data Interpolation**: Prism 스타일의 고품질 보간 곡선 생성
+## 프로젝트 구조 및 역할
+
+| 폴더 / 파일 | 역할 |
+|-------------|------|
+| **`app.py`** | Streamlit 앱 진입점. 모드 선택 후 해당 UI로 분기합니다. |
+| **`app_ui/`** | 웹 UI 코드. Data Load / Model Simulation 모드 화면과 로직을 담당합니다. |
+| **`mode_prep_raw_data/`** | 원본(raw) 데이터 읽기, 시간–곡선 피팅, MM/선형 보정, 초기 속도(v₀) 계산 등 **Data Load 모드의 핵심 연산**을 수행합니다. |
+| **`data_interpolation_mode/`** | Prism 스타일 보간(Exponential Association 등). 보간 곡선 생성 및 결과 저장을 담당합니다. |
+| **`mode_general_analysis/`** | Model Simulation 모드의 **핵심 로직**: 단위 표준화, 정규화, 구간 분할, 6가지 반응 모델 피팅 및 비교 분석입니다. |
+| **`flowchart/`** | 전체 워크플로우·플로우차트 문서 및 관련 스크립트입니다. |
+| **`convert_to_csv/`** | `raw/` 폴더의 XLSX를 prep_raw 형식 CSV로 일괄 변환하는 스크립트가 들어 있습니다. |
+| **`raw/`** | 실험 원본 데이터(XLSX/CSV). 앱의 기본 샘플 및 변환 스크립트의 입력으로 사용됩니다. |
+| **`csv/`** | `convert_to_csv` 스크립트가 생성한 CSV 결과가 저장되는 폴더입니다. |
+| **`prep_raw_data_mode/results/`** | Data Load 모드에서 생성되는 상세 MM 결과(예: `MM_results_detailed.csv`)가 저장됩니다. |
+| **`data_interpolation_mode/results/`** | Data Load 모드에서 생성되는 보간 곡선 CSV(예: `MM_interpolated_curves.csv`)가 저장됩니다. |
+
+---
+
+## 주요 코드 설명
+
+### 1. 앱 실행 및 모드 분기
+- **`app.py`**  
+  - `python -m streamlit run app.py` 로 실행합니다.  
+  - **Data Load Mode**: `app_ui.data_load_mode.data_load_mode(st)` 호출 → 실험 데이터 업로드/로드, 피팅, 보간, MM 보정, 정규화, Excel 저장까지 수행.  
+  - **Model Simulation Mode**: `app_ui.general_analysis_mode.general_analysis_mode(st)` 호출 → Data Load 결과 또는 업로드 파일로 모델 시뮬레이션·비교 분석.
+
+### 2. Data Load 모드 (데이터 로드 → MM 보정 → 보간 → 정규화)
+- **`app_ui/data_load_mode.py`**  
+  - 실험 타입 선택(Substrate/Enzyme 농도 변화), 파일 업로드 또는 `raw/` 기본 샘플 사용.  
+  - `mode_prep_raw_data.prep`의 `read_raw_data`, `fit_time_course`, `fit_calibration_curve`, `calculate_initial_velocity` 등을 사용해 v₀ 계산 및 MM/선형 피팅.  
+  - `data_interpolation_mode.interpolate_prism`으로 보간 범위·곡선 생성.  
+  - 정규화 후 `Michaelis-Menten_calibration_results.xlsx` 생성 및 세션에 결과 저장.
+
+- **`mode_prep_raw_data/prep.py`**  
+  - **어떤 것**: raw CSV/XLSX 읽기, 농도별 시간–곡선 피팅, 초기 속도(v₀) 계산, Michaelis–Menten/선형 보정 곡선 피팅.  
+  - **어떻게**: `read_raw_data()`로 원본 로드 → `fit_time_course()`로 곡선 피팅 → `calculate_initial_velocity()`로 v₀ → `fit_calibration_curve()`로 Vmax, Km, kcat 등 계산.
+
+- **`data_interpolation_mode/interpolate_prism.py`**  
+  - **어떤 것**: Prism 스타일 보간(Exponential Association 등), 보간 범위 계산, 곡선 생성.  
+  - **어떻게**: `exponential_association()`, `create_prism_interpolation_range()` 등으로 보간 포인트 생성 후 CSV/세션에 저장.
+
+### 3. Model Simulation 모드 (모델 피팅 및 비교)
+- **`app_ui/general_analysis_mode.py`**  
+  - Data Load 결과(세션 또는 업로드 CSV/XLSX)를 불러와 단위 표준화·정규화·구간 분할 후, 6가지 모델로 피팅하고 결과를 시각화·다운로드.
+
+- **`mode_general_analysis/analysis.py`**  
+  - **어떤 것**: 단위 표준화(UnitStandardizer), 정규화(DataNormalizer), 구간 분할(RegionDivider), 6가지 반응 모델(Substrate Depletion, Enzyme Deactivation, Mass-Transfer 등) 피팅 및 AIC/BIC/R² 비교.  
+  - **어떻게**: 입력 데이터에 표준화·정규화 적용 → 구간 나눔 → 각 모델로 글로벌 피팅 → 최적 모델 선택 및 파라미터 출력.
+
+- **`mode_general_analysis/plot.py`**  
+  - 피팅 결과 시각화(Visualizer).
+
+### 4. XLSX → CSV 변환 (배치)
+- **`convert_to_csv/convert_xlsx_to_csv.py`**  
+  - **어떤 것**: `raw/` 폴더 안의 모든 XLSX를 prep_raw 형식의 CSV로 변환.  
+  - **어떻게**: 인자 없이 실행하면 `raw/*.xlsx`를 읽어 각각 `csv/<동일파일명>.csv`로 저장. 단일 파일 변환 시에는 `python convert_to_csv/convert_xlsx_to_csv.py raw/파일명.xlsx` 형태로 실행 가능.  
+  - **실행 예**:  
+    ```bash
+    python convert_to_csv/convert_xlsx_to_csv.py
+    ```
+
+---
+
+## 주요 기능 요약
+
+*   **Data Load 모드**: 실험 데이터(CSV/XLSX) 로드 및 전처리  
+    *   Substrate 농도 변화 / Enzyme 농도 변화 실험 지원  
+    *   Michaelis–Menten 피팅 및 초기 속도(v₀) 계산  
+    *   보간(Interpolation) 및 정규화(Normalization)  
+    *   결과 → `Michaelis-Menten_calibration_results.xlsx` 및 results 폴더에 CSV 저장  
+*   **Model Simulation 모드**: 분석된 데이터로 6가지 반응 모델 피팅·비교 및 시각화  
+*   **convert_to_csv**: `raw/` 내 XLSX → `csv/` 폴더에 prep_raw 형식 CSV 일괄 생성  
+
+---
 
 ## 설치 방법
 
-1.  Python 3.8 이상 설치
-2.  필요한 패키지 설치:
+1.  Python 3.8 이상 설치  
+2.  의존성 설치:  
     ```bash
     pip install -r requirements.txt
     ```
+
+---
 
 ## 실행 방법
 
@@ -25,12 +95,11 @@
 python -m streamlit run app.py
 ```
 
-## 데이터 형식
+---
 
-*   **prep_raw.csv/xlsx**:
-    *   Column 1: Time (min)
-    *   Column 2, 5, 8...: Value (농도별)
-    *   Column 3, 6, 9...: SD (옵션)
-    *   Column 4, 7, 10...: N (옵션)
-    *   헤더에 각 농도 정보 포함 필요
+## 데이터 형식 (prep_raw.csv / prep_raw.xlsx)
 
+*   **1행**: 농도 값 (각 농도마다 mean, SD, N 3열 반복)  
+*   **2행**: 컬럼 헤더 (time_min, mean, SD, N, …)  
+*   **3행 이후**: 시간(min), 농도별 mean, SD, N  
+*   앱에서 **Download Sample**로 `raw_substrate.xlsx` / `raw_enzyme.xlsx` 형식 샘플을 받을 수 있음  

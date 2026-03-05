@@ -1380,9 +1380,21 @@ def data_load_mode(st):
             
             tab_titles = []
             if exp_type == "Substrate Concentration Variation (Standard Michaelis-Menten)":
-                tab_titles = ["📊 Time–Fluorescence Interpolation Curve", "🔄 Normalization", "📊 v₀ vs [S] Fit", "📋 Data Table"]
+                tab_titles = [
+                    "📊 Time–Fluorescence Interpolation Curve",
+                    "🔄 Normalization",
+                    "📊 v₀ vs [S] Fit",
+                    "📋 Data Table",
+                    "📤 Export Plots"
+                ]
             else:
-                tab_titles = ["📊 Time–Fluorescence Interpolation Curve", "🔄 Normalization", "📊 v₀ vs [E] Linear Fit", "📋 Data Table"]
+                tab_titles = [
+                    "📊 Time–Fluorescence Interpolation Curve",
+                    "🔄 Normalization",
+                    "📊 v₀ vs [E] Linear Fit",
+                    "📋 Data Table",
+                    "📤 Export Plots"
+                ]
             
             # 탭 상태 초기화
             if 'current_data_load_tab' not in st.session_state:
@@ -2341,7 +2353,7 @@ def data_load_mode(st):
                 else:
                     st.warning("No v₀ vs concentration data available.")
             
-            # 마지막 탭: 데이터 테이블
+            # 마지막에서 두 번째 탭: 데이터 테이블
             data_tab_idx = 3 if exp_type == "Substrate Concentration Variation (Standard Michaelis-Menten)" else 3
             if selected_tab == tab_titles[data_tab_idx]:
                 st.subheader("Detailed Parameters")
@@ -2615,66 +2627,151 @@ def data_load_mode(st):
                     except Exception as e:
                         st.warning(f"Error preparing XLSX download: {e}")
                 
-                # 모든 분석 이미지 ZIP 다운로드 (PNG만, 카메라 버튼과 같은 비율로 내보냄)
+                # 오른쪽 컬럼은 Export Plots 탭 안내만 표시
                 with col2:
-                    try:
-                        import zipfile
-                        import tempfile
-                        from io import BytesIO
-                        # 화면/카메라 버튼과 같은 비율 (가로 800 x 세로 600)
-                        _export_png_width, _export_png_height = 800, 600
-                        fig_list = _build_all_export_figures(results)
-                        zip_buffer = BytesIO()
-                        png_ok = True
+                    st.info(
+                        "이미지 내보내기는 상단 탭의 **📤 Export Plots**에서 이용할 수 있습니다. "
+                        "각 플롯을 미리 보고 PNG로 저장하거나, 모든 플롯을 ZIP으로 한 번에 저장할 수 있습니다."
+                    )
 
-                        def _export_fig_to_png(fig):
-                            """지정 비율로 PNG 바이트 반환. 실패 시 None."""
-                            fig = go.Figure(fig)
-                            fig.update_layout(width=_export_png_width, height=_export_png_height)
-                            tmp = tempfile.NamedTemporaryFile(suffix=".png", delete=False)
-                            fpath = tmp.name
-                            tmp.close()
+            # 마지막 탭: Export Plots
+            export_tab_idx = 4
+            if selected_tab == tab_titles[export_tab_idx]:
+                st.subheader("📤 Export Plots")
+                
+                st.markdown(
+                    """
+                    이 탭에서는 분석에서 생성된 모든 플롯을 한 번에 미리 보고,  
+                    각 플롯을 개별 PNG로 저장하거나, 모든 플롯을 ZIP 파일로 저장할 수 있습니다.
+                    """
+                )
+
+                try:
+                    import zipfile
+                    import tempfile
+                    from io import BytesIO
+
+                    _export_png_width, _export_png_height = 800, 600
+
+                    def _export_fig_to_png_bytes(fig):
+                        """지정 비율로 PNG 바이트 반환. 실패 시 None."""
+                        fig = go.Figure(fig)
+                        fig.update_layout(width=_export_png_width, height=_export_png_height)
+                        tmp = tempfile.NamedTemporaryFile(suffix=".png", delete=False)
+                        fpath = tmp.name
+                        tmp.close()
+                        try:
                             try:
-                                try:
-                                    fig.write_image(fpath, format="png", scale=2, engine="kaleido")
-                                except Exception:
-                                    fig.write_image(fpath, format="png", scale=2)
-                                with open(fpath, "rb") as f:
-                                    return f.read()
+                                fig.write_image(fpath, format="png", scale=2, engine="kaleido")
                             except Exception:
-                                return None
-                            finally:
-                                if os.path.exists(fpath):
-                                    try:
-                                        os.unlink(fpath)
-                                    except OSError:
-                                        pass
+                                fig.write_image(fpath, format="png", scale=2)
+                            with open(fpath, "rb") as f:
+                                return f.read()
+                        except Exception:
+                            return None
+                        finally:
+                            if os.path.exists(fpath):
+                                try:
+                                    os.unlink(fpath)
+                                except OSError:
+                                    pass
 
-                        with zipfile.ZipFile(zip_buffer, 'w', zipfile.ZIP_DEFLATED) as zf:
-                            for name, fig in fig_list:
-                                img_bytes = _export_fig_to_png(fig)
-                                if img_bytes is not None:
-                                    zf.writestr(f"{name}.png", img_bytes)
-                                else:
-                                    png_ok = False
-                                    break
-                        zip_buffer.seek(0)
-                        zip_bytes = zip_buffer.getvalue() if png_ok else b""
-                        if zip_bytes:
+                    # Export용 figure 리스트 생성
+                    fig_list = _build_all_export_figures(results)
+                    total_plots = len(fig_list)
+
+                    # 렌더링 진행 상태 표시용 프로그레스 바
+                    progress_placeholder = st.empty()
+                    if total_plots > 0:
+                        progress_bar = progress_placeholder.progress(
+                            0,
+                            text=f"0 / {total_plots} plots rendered"
+                        )
+                    else:
+                        progress_bar = None
+
+                    # PNG 바이트를 캐시하면서 개별 플롯 렌더링
+                    export_results = []  # [{'name': str, 'png_bytes': bytes or None}, ...]
+
+                    st.markdown("### 개별 플롯 미리보기 및 저장")
+                    for idx, (name, fig) in enumerate(fig_list):
+                        st.markdown(f"**{idx + 1}. {name}**")
+                        st.plotly_chart(fig, use_container_width=True)
+
+                        png_bytes = _export_fig_to_png_bytes(fig)
+                        export_results.append(
+                            {
+                                "name": name,
+                                "png_bytes": png_bytes,
+                            }
+                        )
+
+                        if png_bytes:
                             st.download_button(
-                                label="📥 모든 이미지 저장 (ZIP)",
-                                data=zip_bytes,
-                                file_name="analysis_figures.zip",
-                                mime="application/zip",
+                                label=f"💾 Save PNG ({name})",
+                                data=png_bytes,
+                                file_name=f"{name}.png",
+                                mime="image/png",
                                 use_container_width=True,
-                                help="모든 그래프를 PNG로 저장한 ZIP입니다. 비율은 화면의 카메라 버튼으로 저장할 때와 동일(800×600)합니다."
+                                key=f"export_png_{idx}"
+                            )
+                        else:
+                            st.warning(f"PNG export failed for {name}. Check kaleido installation.")
+
+                        # 진행률 업데이트
+                        if progress_bar is not None and total_plots > 0:
+                            current = idx + 1
+                            percent = int(current / total_plots * 100)
+                            progress_bar.progress(
+                                percent,
+                                text=f"{current} / {total_plots} plots rendered"
+                            )
+
+                        st.markdown("---")
+
+                    # 모든 플롯 렌더링 결과 집계
+                    successful_exports = [item for item in export_results if item["png_bytes"] is not None]
+                    all_success = (len(successful_exports) == total_plots and total_plots > 0)
+
+                    if not all_success:
+                        if total_plots == 0:
+                            st.info("내보낼 플롯이 없습니다.")
+                        elif successful_exports:
+                            st.info(
+                                f"총 {total_plots}개 중 {len(successful_exports)}개 플롯만 PNG 변환에 성공했습니다. "
+                                "모든 플롯이 성공적으로 렌더링된 경우에만 '모든 플랏 다운로드' 버튼이 활성화됩니다."
                             )
                         else:
                             st.info(
-                                "**PNG batch export (ZIP)** requires the kaleido package. "
-                                "You can save each plot as PNG at the same aspect ratio using the **camera button (📷)** on each graph. "
-                                "For a single ZIP download, run `pip install -U kaleido` in the same environment where Streamlit runs, then restart the app."
+                                "모든 플롯 PNG 변환에 실패했습니다. "
+                                "`pip install -U kaleido`로 kaleido를 설치한 후 앱을 다시 시작해 주세요."
                             )
-                    except Exception as zip_err:
-                        st.warning(f"Error preparing image ZIP: {zip_err}")
+
+                    # 모든 플롯이 성공적으로 렌더링된 경우에만 ZIP 데이터 생성
+                    zip_bytes = b""
+                    if all_success:
+                        zip_buffer = BytesIO()
+                        with zipfile.ZipFile(zip_buffer, 'w', zipfile.ZIP_DEFLATED) as zf:
+                            for item in successful_exports:
+                                zf.writestr(f"{item['name']}.png", item["png_bytes"])
+                        zip_buffer.seek(0)
+                        zip_bytes = zip_buffer.getvalue()
+
+                    # 하단 우측에 "모든 플랏 다운로드" 버튼 배치
+                    st.markdown("### ")
+                    footer_col1, footer_col2 = st.columns([3, 1])
+                    with footer_col2:
+                        download_all_enabled = all_success and bool(zip_bytes)
+                        st.download_button(
+                            label="📥 Download ALL Plots (ZIP)",
+                            data=zip_bytes if download_all_enabled else b"",
+                            file_name="all_analysis_plots.zip",
+                            mime="application/zip",
+                            use_container_width=True,
+                            disabled=not download_all_enabled,
+                            key="export_all_plots_zip_download"
+                        )
+
+                except Exception as export_err:
+                    st.warning(f"Error in Export Plots tab: {export_err}")
 

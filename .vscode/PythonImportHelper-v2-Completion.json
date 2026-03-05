@@ -1,0 +1,1027 @@
+[
+    {
+        "label": "pandas",
+        "kind": 6,
+        "isExtraImport": true,
+        "importPath": "pandas",
+        "description": "pandas",
+        "detail": "pandas",
+        "documentation": {}
+    },
+    {
+        "label": "numpy",
+        "kind": 6,
+        "isExtraImport": true,
+        "importPath": "numpy",
+        "description": "numpy",
+        "detail": "numpy",
+        "documentation": {}
+    },
+    {
+        "label": "brentq",
+        "importPath": "scipy.optimize",
+        "description": "scipy.optimize",
+        "isExtraImport": true,
+        "detail": "scipy.optimize",
+        "documentation": {}
+    },
+    {
+        "label": "curve_fit",
+        "importPath": "scipy.optimize",
+        "description": "scipy.optimize",
+        "isExtraImport": true,
+        "detail": "scipy.optimize",
+        "documentation": {}
+    },
+    {
+        "label": "brentq",
+        "importPath": "scipy.optimize",
+        "description": "scipy.optimize",
+        "isExtraImport": true,
+        "detail": "scipy.optimize",
+        "documentation": {}
+    },
+    {
+        "label": "curve_fit",
+        "importPath": "scipy.optimize",
+        "description": "scipy.optimize",
+        "isExtraImport": true,
+        "detail": "scipy.optimize",
+        "documentation": {}
+    },
+    {
+        "label": "curve_fit",
+        "importPath": "scipy.optimize",
+        "description": "scipy.optimize",
+        "isExtraImport": true,
+        "detail": "scipy.optimize",
+        "documentation": {}
+    },
+    {
+        "label": "curve_fit",
+        "importPath": "scipy.optimize",
+        "description": "scipy.optimize",
+        "isExtraImport": true,
+        "detail": "scipy.optimize",
+        "documentation": {}
+    },
+    {
+        "label": "matplotlib.pyplot",
+        "kind": 6,
+        "isExtraImport": true,
+        "importPath": "matplotlib.pyplot",
+        "description": "matplotlib.pyplot",
+        "detail": "matplotlib.pyplot",
+        "documentation": {}
+    },
+    {
+        "label": "matplotlib",
+        "kind": 6,
+        "isExtraImport": true,
+        "importPath": "matplotlib",
+        "description": "matplotlib",
+        "detail": "matplotlib",
+        "documentation": {}
+    },
+    {
+        "label": "warnings",
+        "kind": 6,
+        "isExtraImport": true,
+        "importPath": "warnings",
+        "description": "warnings",
+        "detail": "warnings",
+        "documentation": {}
+    },
+    {
+        "label": "os",
+        "kind": 6,
+        "isExtraImport": true,
+        "importPath": "os",
+        "description": "os",
+        "detail": "os",
+        "documentation": {}
+    },
+    {
+        "label": "streamlit",
+        "kind": 6,
+        "isExtraImport": true,
+        "importPath": "streamlit",
+        "description": "streamlit",
+        "detail": "streamlit",
+        "documentation": {}
+    },
+    {
+        "label": "exponential_association",
+        "importPath": "data_interpolation_mode.interpolate_prism",
+        "description": "data_interpolation_mode.interpolate_prism",
+        "isExtraImport": true,
+        "detail": "data_interpolation_mode.interpolate_prism",
+        "documentation": {}
+    },
+    {
+        "label": "create_prism_interpolation_range",
+        "importPath": "data_interpolation_mode.interpolate_prism",
+        "description": "data_interpolation_mode.interpolate_prism",
+        "isExtraImport": true,
+        "detail": "data_interpolation_mode.interpolate_prism",
+        "documentation": {}
+    },
+    {
+        "label": "exponential_association",
+        "importPath": "data_interpolation_mode.interpolate_prism",
+        "description": "data_interpolation_mode.interpolate_prism",
+        "isExtraImport": true,
+        "detail": "data_interpolation_mode.interpolate_prism",
+        "documentation": {}
+    },
+    {
+        "label": "create_prism_interpolation_range",
+        "importPath": "data_interpolation_mode.interpolate_prism",
+        "description": "data_interpolation_mode.interpolate_prism",
+        "isExtraImport": true,
+        "detail": "data_interpolation_mode.interpolate_prism",
+        "documentation": {}
+    },
+    {
+        "label": "exponential_association",
+        "importPath": "data_interpolation_mode.interpolate_prism",
+        "description": "data_interpolation_mode.interpolate_prism",
+        "isExtraImport": true,
+        "detail": "data_interpolation_mode.interpolate_prism",
+        "documentation": {}
+    },
+    {
+        "label": "create_prism_interpolation_range",
+        "importPath": "data_interpolation_mode.interpolate_prism",
+        "description": "data_interpolation_mode.interpolate_prism",
+        "isExtraImport": true,
+        "detail": "data_interpolation_mode.interpolate_prism",
+        "documentation": {}
+    },
+    {
+        "label": "make_subplots",
+        "importPath": "plotly.subplots",
+        "description": "plotly.subplots",
+        "isExtraImport": true,
+        "detail": "plotly.subplots",
+        "documentation": {}
+    },
+    {
+        "label": "make_subplots",
+        "importPath": "plotly.subplots",
+        "description": "plotly.subplots",
+        "isExtraImport": true,
+        "detail": "plotly.subplots",
+        "documentation": {}
+    },
+    {
+        "label": "plotly.graph_objects",
+        "kind": 6,
+        "isExtraImport": true,
+        "importPath": "plotly.graph_objects",
+        "description": "plotly.graph_objects",
+        "detail": "plotly.graph_objects",
+        "documentation": {}
+    },
+    {
+        "label": "read_raw_data",
+        "importPath": "prep_raw_data_mode.prep",
+        "description": "prep_raw_data_mode.prep",
+        "isExtraImport": true,
+        "detail": "prep_raw_data_mode.prep",
+        "documentation": {}
+    },
+    {
+        "label": "fit_time_course",
+        "importPath": "prep_raw_data_mode.prep",
+        "description": "prep_raw_data_mode.prep",
+        "isExtraImport": true,
+        "detail": "prep_raw_data_mode.prep",
+        "documentation": {}
+    },
+    {
+        "label": "fit_calibration_curve",
+        "importPath": "prep_raw_data_mode.prep",
+        "description": "prep_raw_data_mode.prep",
+        "isExtraImport": true,
+        "detail": "prep_raw_data_mode.prep",
+        "documentation": {}
+    },
+    {
+        "label": "michaelis_menten_calibration",
+        "importPath": "prep_raw_data_mode.prep",
+        "description": "prep_raw_data_mode.prep",
+        "isExtraImport": true,
+        "detail": "prep_raw_data_mode.prep",
+        "documentation": {}
+    },
+    {
+        "label": "re",
+        "kind": 6,
+        "isExtraImport": true,
+        "importPath": "re",
+        "description": "re",
+        "detail": "re",
+        "documentation": {}
+    },
+    {
+        "label": "Image",
+        "importPath": "PIL",
+        "description": "PIL",
+        "isExtraImport": true,
+        "detail": "PIL",
+        "documentation": {}
+    },
+    {
+        "label": "read_raw_data",
+        "importPath": "mode_prep_raw_data.prep",
+        "description": "mode_prep_raw_data.prep",
+        "isExtraImport": true,
+        "detail": "mode_prep_raw_data.prep",
+        "documentation": {}
+    },
+    {
+        "label": "fit_time_course",
+        "importPath": "mode_prep_raw_data.prep",
+        "description": "mode_prep_raw_data.prep",
+        "isExtraImport": true,
+        "detail": "mode_prep_raw_data.prep",
+        "documentation": {}
+    },
+    {
+        "label": "fit_calibration_curve",
+        "importPath": "mode_prep_raw_data.prep",
+        "description": "mode_prep_raw_data.prep",
+        "isExtraImport": true,
+        "detail": "mode_prep_raw_data.prep",
+        "documentation": {}
+    },
+    {
+        "label": "michaelis_menten_calibration",
+        "importPath": "mode_prep_raw_data.prep",
+        "description": "mode_prep_raw_data.prep",
+        "isExtraImport": true,
+        "detail": "mode_prep_raw_data.prep",
+        "documentation": {}
+    },
+    {
+        "label": "calculate_initial_velocity",
+        "importPath": "mode_prep_raw_data.prep",
+        "description": "mode_prep_raw_data.prep",
+        "isExtraImport": true,
+        "detail": "mode_prep_raw_data.prep",
+        "documentation": {}
+    },
+    {
+        "label": "michaelis_menten_calibration",
+        "importPath": "mode_prep_raw_data.prep",
+        "description": "mode_prep_raw_data.prep",
+        "isExtraImport": true,
+        "detail": "mode_prep_raw_data.prep",
+        "documentation": {}
+    },
+    {
+        "label": "Path",
+        "importPath": "pathlib",
+        "description": "pathlib",
+        "isExtraImport": true,
+        "detail": "pathlib",
+        "documentation": {}
+    },
+    {
+        "label": "Path",
+        "importPath": "pathlib",
+        "description": "pathlib",
+        "isExtraImport": true,
+        "detail": "pathlib",
+        "documentation": {}
+    },
+    {
+        "label": "Path",
+        "importPath": "pathlib",
+        "description": "pathlib",
+        "isExtraImport": true,
+        "detail": "pathlib",
+        "documentation": {}
+    },
+    {
+        "label": "UnitStandardizer",
+        "importPath": "mode_general_analysis.analysis",
+        "description": "mode_general_analysis.analysis",
+        "isExtraImport": true,
+        "detail": "mode_general_analysis.analysis",
+        "documentation": {}
+    },
+    {
+        "label": "DataNormalizer",
+        "importPath": "mode_general_analysis.analysis",
+        "description": "mode_general_analysis.analysis",
+        "isExtraImport": true,
+        "detail": "mode_general_analysis.analysis",
+        "documentation": {}
+    },
+    {
+        "label": "RegionDivider",
+        "importPath": "mode_general_analysis.analysis",
+        "description": "mode_general_analysis.analysis",
+        "isExtraImport": true,
+        "detail": "mode_general_analysis.analysis",
+        "documentation": {}
+    },
+    {
+        "label": "ModelA_SubstrateDepletion",
+        "importPath": "mode_general_analysis.analysis",
+        "description": "mode_general_analysis.analysis",
+        "isExtraImport": true,
+        "detail": "mode_general_analysis.analysis",
+        "documentation": {}
+    },
+    {
+        "label": "ModelB_EnzymeDeactivation",
+        "importPath": "mode_general_analysis.analysis",
+        "description": "mode_general_analysis.analysis",
+        "isExtraImport": true,
+        "detail": "mode_general_analysis.analysis",
+        "documentation": {}
+    },
+    {
+        "label": "ModelC_MassTransfer",
+        "importPath": "mode_general_analysis.analysis",
+        "description": "mode_general_analysis.analysis",
+        "isExtraImport": true,
+        "detail": "mode_general_analysis.analysis",
+        "documentation": {}
+    },
+    {
+        "label": "ModelD_ConcentrationDependentFmax",
+        "importPath": "mode_general_analysis.analysis",
+        "description": "mode_general_analysis.analysis",
+        "isExtraImport": true,
+        "detail": "mode_general_analysis.analysis",
+        "documentation": {}
+    },
+    {
+        "label": "ModelE_ProductInhibition",
+        "importPath": "mode_general_analysis.analysis",
+        "description": "mode_general_analysis.analysis",
+        "isExtraImport": true,
+        "detail": "mode_general_analysis.analysis",
+        "documentation": {}
+    },
+    {
+        "label": "ModelF_EnzymeSurfaceSequestration",
+        "importPath": "mode_general_analysis.analysis",
+        "description": "mode_general_analysis.analysis",
+        "isExtraImport": true,
+        "detail": "mode_general_analysis.analysis",
+        "documentation": {}
+    },
+    {
+        "label": "Visualizer",
+        "importPath": "mode_general_analysis.plot",
+        "description": "mode_general_analysis.plot",
+        "isExtraImport": true,
+        "detail": "mode_general_analysis.plot",
+        "documentation": {}
+    },
+    {
+        "label": "sys",
+        "kind": 6,
+        "isExtraImport": true,
+        "importPath": "sys",
+        "description": "sys",
+        "detail": "sys",
+        "documentation": {}
+    },
+    {
+        "label": "requests",
+        "kind": 6,
+        "isExtraImport": true,
+        "importPath": "requests",
+        "description": "requests",
+        "detail": "requests",
+        "documentation": {}
+    },
+    {
+        "label": "base64",
+        "kind": 6,
+        "isExtraImport": true,
+        "importPath": "base64",
+        "description": "base64",
+        "detail": "base64",
+        "documentation": {}
+    },
+    {
+        "label": "solve_ivp",
+        "importPath": "scipy.integrate",
+        "description": "scipy.integrate",
+        "isExtraImport": true,
+        "detail": "scipy.integrate",
+        "documentation": {}
+    },
+    {
+        "label": "solve_ivp",
+        "importPath": "scipy.integrate",
+        "description": "scipy.integrate",
+        "isExtraImport": true,
+        "detail": "scipy.integrate",
+        "documentation": {}
+    },
+    {
+        "label": "dataclass",
+        "importPath": "dataclasses",
+        "description": "dataclasses",
+        "isExtraImport": true,
+        "detail": "dataclasses",
+        "documentation": {}
+    },
+    {
+        "label": "Dict",
+        "importPath": "typing",
+        "description": "typing",
+        "isExtraImport": true,
+        "detail": "typing",
+        "documentation": {}
+    },
+    {
+        "label": "List",
+        "importPath": "typing",
+        "description": "typing",
+        "isExtraImport": true,
+        "detail": "typing",
+        "documentation": {}
+    },
+    {
+        "label": "plotly.express",
+        "kind": 6,
+        "isExtraImport": true,
+        "importPath": "plotly.express",
+        "description": "plotly.express",
+        "detail": "plotly.express",
+        "documentation": {}
+    },
+    {
+        "label": "seaborn",
+        "kind": 6,
+        "isExtraImport": true,
+        "importPath": "seaborn",
+        "description": "seaborn",
+        "detail": "seaborn",
+        "documentation": {}
+    },
+    {
+        "label": "data_load_mode",
+        "importPath": "app_ui.data_load_mode",
+        "description": "app_ui.data_load_mode",
+        "isExtraImport": true,
+        "detail": "app_ui.data_load_mode",
+        "documentation": {}
+    },
+    {
+        "label": "general_analysis_mode",
+        "importPath": "app_ui.general_analysis_mode",
+        "description": "app_ui.general_analysis_mode",
+        "isExtraImport": true,
+        "detail": "app_ui.general_analysis_mode",
+        "documentation": {}
+    },
+    {
+        "label": "render_footer",
+        "importPath": "app_ui.footer",
+        "description": "app_ui.footer",
+        "isExtraImport": true,
+        "detail": "app_ui.footer",
+        "documentation": {}
+    },
+    {
+        "label": "exponential_association",
+        "kind": 2,
+        "importPath": ".history.data_interpolation_mode.interpolate_prism",
+        "description": ".history.data_interpolation_mode.interpolate_prism",
+        "peekOfCode": "def exponential_association(t, F0, Fmax, k):\n    \"\"\"\n    Exponential Association 모델\n    F(t) = F0 + (Fmax - F0) * [1 - exp(-k*t)]\n    \"\"\"\n    return F0 + (Fmax - F0) * (1 - np.exp(-k * t))\ndef inverse_exponential_association(y, F0, Fmax, k, x_low, x_high):\n    \"\"\"\n    Y → X 역함수 (이진 이등분법 사용)\n    F(t) = F0 + (Fmax - F0) * [1 - exp(-k*t)]",
+        "detail": ".history.data_interpolation_mode.interpolate_prism",
+        "documentation": {}
+    },
+    {
+        "label": "inverse_exponential_association",
+        "kind": 2,
+        "importPath": ".history.data_interpolation_mode.interpolate_prism",
+        "description": ".history.data_interpolation_mode.interpolate_prism",
+        "peekOfCode": "def inverse_exponential_association(y, F0, Fmax, k, x_low, x_high):\n    \"\"\"\n    Y → X 역함수 (이진 이등분법 사용)\n    F(t) = F0 + (Fmax - F0) * [1 - exp(-k*t)]\n    → t = -ln(1 - (y - F0)/(Fmax - F0)) / k\n    단, 단조성이 보장되지 않는 경우를 대비해 이진 이등분법 사용\n    \"\"\"\n    def f(x):\n        return exponential_association(x, F0, Fmax, k) - y\n    try:",
+        "detail": ".history.data_interpolation_mode.interpolate_prism",
+        "documentation": {}
+    },
+    {
+        "label": "create_prism_interpolation_range",
+        "kind": 2,
+        "importPath": ".history.data_interpolation_mode.interpolate_prism",
+        "description": ".history.data_interpolation_mode.interpolate_prism",
+        "peekOfCode": "def create_prism_interpolation_range(x_data):\n    \"\"\"\n    Prism 스타일 보간/외삽 범위 생성\n    규칙:\n    1. 데이터 범위: [Xmin, Xmax]\n    2. 확장 범위: 각 방향으로 (Xmax - Xmin) / 2\n    3. 모든 데이터가 양수면 음수 제외\n    4. 모든 데이터가 음수면 양수 제외\n    \"\"\"\n    x_min = np.min(x_data)",
+        "detail": ".history.data_interpolation_mode.interpolate_prism",
+        "documentation": {}
+    },
+    {
+        "label": "prism_interpolate_x_to_y",
+        "kind": 2,
+        "importPath": ".history.data_interpolation_mode.interpolate_prism",
+        "description": ".history.data_interpolation_mode.interpolate_prism",
+        "peekOfCode": "def prism_interpolate_x_to_y(x_interp, F0, Fmax, k):\n    \"\"\"\n    X → Y 보간 (방정식으로 직접 계산)\n    \"\"\"\n    return exponential_association(x_interp, F0, Fmax, k)\ndef prism_interpolate_y_to_x(y_interp, F0, Fmax, k, x_range_min, x_range_max, \n                               x_data_min, x_data_max, n_segments=1000):\n    \"\"\"\n    Y → X 보간 (Prism 알고리즘)\n    1. 확장된 범위를 1000개 선분으로 나눔",
+        "detail": ".history.data_interpolation_mode.interpolate_prism",
+        "documentation": {}
+    },
+    {
+        "label": "prism_interpolate_y_to_x",
+        "kind": 2,
+        "importPath": ".history.data_interpolation_mode.interpolate_prism",
+        "description": ".history.data_interpolation_mode.interpolate_prism",
+        "peekOfCode": "def prism_interpolate_y_to_x(y_interp, F0, Fmax, k, x_range_min, x_range_max, \n                               x_data_min, x_data_max, n_segments=1000):\n    \"\"\"\n    Y → X 보간 (Prism 알고리즘)\n    1. 확장된 범위를 1000개 선분으로 나눔\n    2. 가장 낮은 X부터 스캔하여 Y가 포함된 첫 번째 선분 찾기\n    3. 해당 선분 내에서 이진 이등분법으로 정확한 X 계산\n    \"\"\"\n    # 확장된 범위를 선분으로 나눔\n    segment_edges = np.linspace(x_range_min, x_range_max, n_segments + 1)",
+        "detail": ".history.data_interpolation_mode.interpolate_prism",
+        "documentation": {}
+    },
+    {
+        "label": "main",
+        "kind": 2,
+        "importPath": ".history.data_interpolation_mode.interpolate_prism",
+        "description": ".history.data_interpolation_mode.interpolate_prism",
+        "peekOfCode": "def main():\n    \"\"\"메인 함수\"\"\"\n    print(\"📊 GraphPad Interpolation Generator\")\n    print(\"=\" * 70)\n    # 1. Fit 파라미터 읽기\n    print(\"\\n1️⃣ Fit 파라미터 읽는 중...\")\n    try:\n        mm_results = pd.read_csv('MM_results_detailed.csv')\n        print(f\"   ✅ {len(mm_results)}개 농도 조건 발견\")\n    except Exception as e:",
+        "detail": ".history.data_interpolation_mode.interpolate_prism",
+        "documentation": {}
+    },
+    {
+        "label": "plot_interpolated_curves",
+        "kind": 2,
+        "importPath": ".history.data_interpolation_mode.interpolate_prism",
+        "description": ".history.data_interpolation_mode.interpolate_prism",
+        "peekOfCode": "def plot_interpolated_curves(interp_df, raw_df, mm_results):\n    \"\"\"\n    보간 곡선과 원본 데이터를 함께 그래프로 그리기\n    \"\"\"\n    fig, ax = plt.subplots(figsize=(12, 8))\n    # 농도별 색상 매핑 (농도 순서대로)\n    conc_color_map = {\n        '0.3125ug/ml': 'blue',\n        '0.625 ug/mL': 'red',\n        '1.25 ug/mL': 'orange',",
+        "detail": ".history.data_interpolation_mode.interpolate_prism",
+        "documentation": {}
+    },
+    {
+        "label": "data_interpolation_mode",
+        "kind": 2,
+        "importPath": ".history.interp_mode",
+        "description": ".history.interp_mode",
+        "peekOfCode": "def data_interpolation_mode(st):\n    \"\"\"Data Interpolation 모드 - Prism 스타일 보간\"\"\"\n    # 폴더 구조 생성\n    os.makedirs(\"prep_data/raw\", exist_ok=True)\n    os.makedirs(\"data_interpolation_mode/results\", exist_ok=True)\n    st.header(\"📈 Data Interpolation 모드\")\n    st.markdown(\"GraphPad스타일 보간 - Fitting 결과에서 고밀도 곡선 생성\")\n    st.markdown(\"---\")\n    # 사이드바 설정\n    st.sidebar.title(\"⚙️ Data Interpolation 설정\")",
+        "detail": ".history.interp_mode",
+        "documentation": {}
+    },
+    {
+        "label": "prep_raw_data_mode",
+        "kind": 2,
+        "importPath": ".history.prep_mode",
+        "description": ".history.prep_mode",
+        "peekOfCode": "def prep_raw_data_mode(st):\n    \"\"\"Prep Raw Data 모드 - Michaelis-Menten Fitting\"\"\"\n    # 폴더 구조 생성\n    os.makedirs(\"prep_data/raw\", exist_ok=True)\n    os.makedirs(\"prep_raw_data_mode/results\", exist_ok=True)\n    st.header(\"📊 Prep Raw Data 모드\")\n    st.markdown(\"Michaelis-Menten Fitting 및 Calculated Curve 생성\")\n    st.markdown(\"---\")\n    # 사이드바 설정\n    st.sidebar.title(\"⚙️ Prep Raw Data 설정\")",
+        "detail": ".history.prep_mode",
+        "documentation": {}
+    },
+    {
+        "label": "detect_lines_and_points",
+        "kind": 2,
+        "importPath": "app_ui.data_load_mode",
+        "description": "app_ui.data_load_mode",
+        "peekOfCode": "def detect_lines_and_points(image_array):\n    \"\"\"\n    이미지에서 선과 점을 감지하는 함수\n    \"\"\"\n    if not CV2_AVAILABLE:\n        return None, None\n    try:\n        # 그레이스케일 변환\n        if len(image_array.shape) == 3:\n            gray = cv2.cvtColor(image_array, cv2.COLOR_RGB2GRAY)",
+        "detail": "app_ui.data_load_mode",
+        "documentation": {}
+    },
+    {
+        "label": "extract_line_data_from_image",
+        "kind": 2,
+        "importPath": "app_ui.data_load_mode",
+        "description": "app_ui.data_load_mode",
+        "peekOfCode": "def extract_line_data_from_image(image_file, lines):\n    \"\"\"\n    이미지에서 선 데이터를 추출하고 exponential association 모델로 fitting\n    \"\"\"\n    try:\n        image = Image.open(image_file)\n        img_array = np.array(image)\n        if lines is None or len(lines) == 0:\n            return None\n        # 선에서 데이터 포인트 추출 (간단한 예시)",
+        "detail": "app_ui.data_load_mode",
+        "documentation": {}
+    },
+    {
+        "label": "extract_legend_text",
+        "kind": 2,
+        "importPath": "app_ui.data_load_mode",
+        "description": "app_ui.data_load_mode",
+        "peekOfCode": "def extract_legend_text(image_array):\n    \"\"\"\n    이미지에서 범례 텍스트를 추출하는 함수 (OCR 사용)\n    \"\"\"\n    legend_texts = []\n    if TESSERACT_AVAILABLE:\n        try:\n            # 범례 영역은 보통 이미지의 오른쪽 상단 또는 하단에 위치\n            # 전체 이미지에서 텍스트 추출 시도\n            data = pytesseract.image_to_data(image_array, output_type=Output.DICT, lang='eng')",
+        "detail": "app_ui.data_load_mode",
+        "documentation": {}
+    },
+    {
+        "label": "convert_image_coords_to_data",
+        "kind": 2,
+        "importPath": "app_ui.data_load_mode",
+        "description": "app_ui.data_load_mode",
+        "peekOfCode": "def convert_image_coords_to_data(x_img, y_img, img_width, img_height, \n                                  x_min, x_max, y_min, y_max,\n                                  plot_x_min, plot_x_max, plot_y_min, plot_y_max):\n    \"\"\"\n    이미지 좌표를 실제 데이터 좌표로 변환\n    Args:\n        x_img, y_img: 이미지 상의 픽셀 좌표\n        img_width, img_height: 이미지 전체 크기\n        x_min, x_max, y_min, y_max: 그래프 축의 실제 데이터 범위\n        plot_x_min, plot_x_max, plot_y_min, plot_y_max: 그래프 영역의 픽셀 좌표",
+        "detail": "app_ui.data_load_mode",
+        "documentation": {}
+    },
+    {
+        "label": "extract_point_data_from_image",
+        "kind": 2,
+        "importPath": "app_ui.data_load_mode",
+        "description": "app_ui.data_load_mode",
+        "peekOfCode": "def extract_point_data_from_image(image_file, points):\n    \"\"\"\n    이미지에서 점 데이터를 추출\n    \"\"\"\n    try:\n        image = Image.open(image_file)\n        img_array = np.array(image)\n        if points is None or len(points) == 0:\n            return None\n        # 점에서 데이터 포인트 추출 (간단한 예시)",
+        "detail": "app_ui.data_load_mode",
+        "documentation": {}
+    },
+    {
+        "label": "exponential_fit_simple",
+        "kind": 2,
+        "importPath": "app_ui.data_load_mode",
+        "description": "app_ui.data_load_mode",
+        "peekOfCode": "def exponential_fit_simple(t, F_max, k_obs):\n    \"\"\"\n    Exponential fit 모델: F(t) = F_max(1 - e^(-k_obs*t))\n    이미지에서 참고한 모델\n    \"\"\"\n    return F_max * (1 - np.exp(-k_obs * t))\ndef _conc_to_export_label(conc_value, exp_type):\n    \"\"\"Export용 파일명 라벨 (예: 0.3125ugmL, 10uM).\"\"\"\n    if exp_type == \"Substrate Concentration Variation (Standard Michaelis-Menten)\":\n        return re.sub(r'[^\\w.]', '', f\"{conc_value}uM\")",
+        "detail": "app_ui.data_load_mode",
+        "documentation": {}
+    },
+    {
+        "label": "normalize_iterative",
+        "kind": 2,
+        "importPath": "app_ui.data_load_mode",
+        "description": "app_ui.data_load_mode",
+        "peekOfCode": "def normalize_iterative(times, values, num_iterations=2):\n    \"\"\"\n    반복 정규화 수행\n    1차 정규화: F0 = value at time 0, Fmax = max(F)\n    2차 정규화: Exponential fit F(t) = F_max(1 - e^(-k_obs*t))\n    Parameters:\n    - times: 시간 배열\n    - values: 형광값 배열\n    - num_iterations: 반복 횟수 (최소 2번)\n    Returns:",
+        "detail": "app_ui.data_load_mode",
+        "documentation": {}
+    },
+    {
+        "label": "manual_data_entry",
+        "kind": 2,
+        "importPath": "app_ui.data_load_mode",
+        "description": "app_ui.data_load_mode",
+        "peekOfCode": "def manual_data_entry(data_type=\"점\"):\n    \"\"\"\n    수동으로 데이터 포인트를 입력받는 함수\n    data_type: \"점\" 또는 \"선\"\n    \"\"\"\n    st.subheader(f\"📝 수동 데이터 입력 ({data_type} 데이터)\")\n    num_curves = st.number_input(\"곡선 개수 (농도 조건 수)\", min_value=1, max_value=20, value=1)\n    all_curves_data = {}\n    for curve_idx in range(num_curves):\n        with st.expander(f\"곡선 {curve_idx + 1} (농도 조건)\", expanded=(curve_idx == 0)):",
+        "detail": "app_ui.data_load_mode",
+        "documentation": {}
+    },
+    {
+        "label": "data_load_mode",
+        "kind": 2,
+        "importPath": "app_ui.data_load_mode",
+        "description": "app_ui.data_load_mode",
+        "peekOfCode": "def data_load_mode(st):\n    \"\"\"Data Load 모드 - CSV 파일 업로드 또는 이미지에서 데이터 추출\"\"\"\n    # 폴더 구조 생성\n    os.makedirs(\"prep_raw_data_mode\", exist_ok=True)\n    os.makedirs(\"prep_raw_data_mode/results\", exist_ok=True)\n    os.makedirs(\"data_interpolation_mode/results\", exist_ok=True)\n    st.header(\"📥 Data Load Mode\")\n    st.markdown(\"---\")\n    # Sidebar configuration\n    st.sidebar.title(\"⚙️ Data Load Settings\")",
+        "detail": "app_ui.data_load_mode",
+        "documentation": {}
+    },
+    {
+        "label": "render_footer",
+        "kind": 2,
+        "importPath": "app_ui.footer",
+        "description": "app_ui.footer",
+        "peekOfCode": "def render_footer() -> None:\n    \"\"\"고정 하단 푸터 표시\"\"\"\n    st.markdown(\n        \"\"\"\n        <style>\n        .app-footer {\n            position: fixed;\n            left: 0;\n            right: 0;\n            bottom: 0;",
+        "detail": "app_ui.footer",
+        "documentation": {}
+    },
+    {
+        "label": "verbose_callback",
+        "kind": 2,
+        "importPath": "app_ui.general_analysis_mode",
+        "description": "app_ui.general_analysis_mode",
+        "peekOfCode": "def verbose_callback(message: str, level: str = \"info\"):\n    \"\"\"Callback function for logging from analysis modules\"\"\"\n    if level == \"error\":\n        st.error(message)\n    elif level == \"warning\":\n        st.warning(message)\n    elif level == \"debug\":\n        st.code(message)\n    else:\n        st.info(message)",
+        "detail": "app_ui.general_analysis_mode",
+        "documentation": {}
+    },
+    {
+        "label": "general_analysis_mode",
+        "kind": 2,
+        "importPath": "app_ui.general_analysis_mode",
+        "description": "app_ui.general_analysis_mode",
+        "peekOfCode": "def general_analysis_mode(st):\n    \"\"\"Model Simulation Mode - Standard FRET Analysis\"\"\"\n    # Sidebar configuration\n    st.sidebar.title(\"⚙️ Settings\")\n    enzyme_mw = st.sidebar.number_input(\n        \"Enzyme Molecular Weight (kDa)\",\n        min_value=1.0,\n        max_value=500.0,\n        value=56.6,\n        step=0.1,",
+        "detail": "app_ui.general_analysis_mode",
+        "documentation": {}
+    },
+    {
+        "label": "extract_concentration_from_header",
+        "kind": 2,
+        "importPath": "convert_to_csv.convert_xlsx_to_csv",
+        "description": "convert_to_csv.convert_xlsx_to_csv",
+        "peekOfCode": "def extract_concentration_from_header(header_value):\n    \"\"\"\n    헤더에서 농도 값 추출\n    예: \"0.3125ug/ml\" -> 0.3125\n    \"\"\"\n    if pd.isna(header_value):\n        return None\n    header_str = str(header_value).strip()\n    # 숫자 부분만 추출\n    import re",
+        "detail": "convert_to_csv.convert_xlsx_to_csv",
+        "documentation": {}
+    },
+    {
+        "label": "convert_xlsx_to_prep_raw",
+        "kind": 2,
+        "importPath": "convert_to_csv.convert_xlsx_to_csv",
+        "description": "convert_to_csv.convert_xlsx_to_csv",
+        "peekOfCode": "def convert_xlsx_to_prep_raw(xlsx_path, output_path=None, n_value=50):\n    \"\"\"\n    XLSX 파일을 prep_raw.csv 형식으로 변환\n    Parameters:\n    - xlsx_path: 입력 XLSX 파일 경로\n    - output_path: 출력 CSV 파일 경로 (None이면 자동 생성)\n    - n_value: N 값 (복제수, 기본값 50)\n    Returns:\n    - output_path: 생성된 CSV 파일 경로\n    \"\"\"",
+        "detail": "convert_to_csv.convert_xlsx_to_csv",
+        "documentation": {}
+    },
+    {
+        "label": "main",
+        "kind": 2,
+        "importPath": "convert_to_csv.convert_xlsx_to_csv",
+        "description": "convert_to_csv.convert_xlsx_to_csv",
+        "peekOfCode": "def main():\n    \"\"\"메인 함수\"\"\"\n    import argparse\n    # 스크립트가 있는 디렉토리 경로\n    script_dir = Path(__file__).parent.absolute()\n    raw_dir = script_dir / 'raw'\n    csv_dir = script_dir / 'csv'\n    parser = argparse.ArgumentParser(description='XLSX 파일을 prep_raw.csv 형식으로 변환')\n    parser.add_argument('input_file', nargs='?', default=None,\n                       help='입력 XLSX 파일 경로 (생략 시 raw/ 폴더 내 모든 XLSX 변환)')",
+        "detail": "convert_to_csv.convert_xlsx_to_csv",
+        "documentation": {}
+    },
+    {
+        "label": "exponential_association",
+        "kind": 2,
+        "importPath": "data_interpolation_mode.interpolate_prism",
+        "description": "data_interpolation_mode.interpolate_prism",
+        "peekOfCode": "def exponential_association(t, F0, Fmax, k):\n    \"\"\"\n    Exponential Association 모델\n    F(t) = F0 + (Fmax - F0) * [1 - exp(-k*t)]\n    \"\"\"\n    return F0 + (Fmax - F0) * (1 - np.exp(-k * t))\ndef inverse_exponential_association(y, F0, Fmax, k, x_low, x_high):\n    \"\"\"\n    Y → X 역함수 (이진 이등분법 사용)\n    F(t) = F0 + (Fmax - F0) * [1 - exp(-k*t)]",
+        "detail": "data_interpolation_mode.interpolate_prism",
+        "documentation": {}
+    },
+    {
+        "label": "inverse_exponential_association",
+        "kind": 2,
+        "importPath": "data_interpolation_mode.interpolate_prism",
+        "description": "data_interpolation_mode.interpolate_prism",
+        "peekOfCode": "def inverse_exponential_association(y, F0, Fmax, k, x_low, x_high):\n    \"\"\"\n    Y → X 역함수 (이진 이등분법 사용)\n    F(t) = F0 + (Fmax - F0) * [1 - exp(-k*t)]\n    → t = -ln(1 - (y - F0)/(Fmax - F0)) / k\n    단, 단조성이 보장되지 않는 경우를 대비해 이진 이등분법 사용\n    \"\"\"\n    def f(x):\n        return exponential_association(x, F0, Fmax, k) - y\n    try:",
+        "detail": "data_interpolation_mode.interpolate_prism",
+        "documentation": {}
+    },
+    {
+        "label": "create_prism_interpolation_range",
+        "kind": 2,
+        "importPath": "data_interpolation_mode.interpolate_prism",
+        "description": "data_interpolation_mode.interpolate_prism",
+        "peekOfCode": "def create_prism_interpolation_range(x_data):\n    \"\"\"\n    Prism 스타일 보간/외삽 범위 생성\n    규칙:\n    1. 데이터 범위: [Xmin, Xmax]\n    2. 확장 범위: 각 방향으로 (Xmax - Xmin) / 2\n    3. 모든 데이터가 양수면 음수 제외\n    4. 모든 데이터가 음수면 양수 제외\n    \"\"\"\n    x_min = np.min(x_data)",
+        "detail": "data_interpolation_mode.interpolate_prism",
+        "documentation": {}
+    },
+    {
+        "label": "prism_interpolate_x_to_y",
+        "kind": 2,
+        "importPath": "data_interpolation_mode.interpolate_prism",
+        "description": "data_interpolation_mode.interpolate_prism",
+        "peekOfCode": "def prism_interpolate_x_to_y(x_interp, F0, Fmax, k):\n    \"\"\"\n    X → Y 보간 (방정식으로 직접 계산)\n    \"\"\"\n    return exponential_association(x_interp, F0, Fmax, k)\ndef prism_interpolate_y_to_x(y_interp, F0, Fmax, k, x_range_min, x_range_max, \n                               x_data_min, x_data_max, n_segments=1000):\n    \"\"\"\n    Y → X 보간 (Prism 알고리즘)\n    1. 확장된 범위를 1000개 선분으로 나눔",
+        "detail": "data_interpolation_mode.interpolate_prism",
+        "documentation": {}
+    },
+    {
+        "label": "prism_interpolate_y_to_x",
+        "kind": 2,
+        "importPath": "data_interpolation_mode.interpolate_prism",
+        "description": "data_interpolation_mode.interpolate_prism",
+        "peekOfCode": "def prism_interpolate_y_to_x(y_interp, F0, Fmax, k, x_range_min, x_range_max, \n                               x_data_min, x_data_max, n_segments=1000):\n    \"\"\"\n    Y → X 보간 (Prism 알고리즘)\n    1. 확장된 범위를 1000개 선분으로 나눔\n    2. 가장 낮은 X부터 스캔하여 Y가 포함된 첫 번째 선분 찾기\n    3. 해당 선분 내에서 이진 이등분법으로 정확한 X 계산\n    \"\"\"\n    # 확장된 범위를 선분으로 나눔\n    segment_edges = np.linspace(x_range_min, x_range_max, n_segments + 1)",
+        "detail": "data_interpolation_mode.interpolate_prism",
+        "documentation": {}
+    },
+    {
+        "label": "main",
+        "kind": 2,
+        "importPath": "data_interpolation_mode.interpolate_prism",
+        "description": "data_interpolation_mode.interpolate_prism",
+        "peekOfCode": "def main():\n    \"\"\"메인 함수\"\"\"\n    print(\"📊 Interpolation Generator\")\n    print(\"=\" * 70)\n    # 1. Fit 파라미터 읽기\n    print(\"\\n1️⃣ Fit 파라미터 읽는 중...\")\n    try:\n        mm_results = pd.read_csv('MM_results_detailed.csv')\n        print(f\"   ✅ {len(mm_results)}개 농도 조건 발견\")\n    except Exception as e:",
+        "detail": "data_interpolation_mode.interpolate_prism",
+        "documentation": {}
+    },
+    {
+        "label": "plot_interpolated_curves",
+        "kind": 2,
+        "importPath": "data_interpolation_mode.interpolate_prism",
+        "description": "data_interpolation_mode.interpolate_prism",
+        "peekOfCode": "def plot_interpolated_curves(interp_df, raw_df, mm_results):\n    \"\"\"\n    보간 곡선과 원본 데이터를 함께 그래프로 그리기\n    \"\"\"\n    fig, ax = plt.subplots(figsize=(12, 8))\n    # 농도별 색상 매핑 (농도 순서대로)\n    conc_color_map = {\n        '0.3125ug/ml': 'blue',\n        '0.625 ug/mL': 'red',\n        '1.25 ug/mL': 'orange',",
+        "detail": "data_interpolation_mode.interpolate_prism",
+        "documentation": {}
+    },
+    {
+        "label": "exponential_association",
+        "kind": 2,
+        "importPath": "flowchart.explain_equation_calculation",
+        "description": "flowchart.explain_equation_calculation",
+        "peekOfCode": "def exponential_association(t, F0, Fmax, k):\n    \"\"\"\n    Exponential Association 모델\n    F(t) = F0 + (Fmax - F0) * [1 - exp(-k*t)]\n    \"\"\"\n    return F0 + (Fmax - F0) * (1 - np.exp(-k * t))\ndef read_raw_data(filename='prep_data/prep_raw.csv'):\n    \"\"\"Raw 데이터 읽기\"\"\"\n    first_row_df = pd.read_csv(filename, header=None, nrows=1, sep='\\t')\n    concentration_row = first_row_df.iloc[0].values[1:]",
+        "detail": "flowchart.explain_equation_calculation",
+        "documentation": {}
+    },
+    {
+        "label": "read_raw_data",
+        "kind": 2,
+        "importPath": "flowchart.explain_equation_calculation",
+        "description": "flowchart.explain_equation_calculation",
+        "peekOfCode": "def read_raw_data(filename='prep_data/prep_raw.csv'):\n    \"\"\"Raw 데이터 읽기\"\"\"\n    first_row_df = pd.read_csv(filename, header=None, nrows=1, sep='\\t')\n    concentration_row = first_row_df.iloc[0].values[1:]\n    header_row_df = pd.read_csv(filename, header=None, skiprows=[0], nrows=1, sep='\\t')\n    header_names = header_row_df.iloc[0].values\n    df = pd.read_csv(filename, header=None, skiprows=[0, 1], sep='\\t')\n    df.columns = header_names\n    time_col = df.columns[0]\n    times = pd.to_numeric(df[time_col].values, errors='coerce')",
+        "detail": "flowchart.explain_equation_calculation",
+        "documentation": {}
+    },
+    {
+        "label": "fit_equation_detailed",
+        "kind": 2,
+        "importPath": "flowchart.explain_equation_calculation",
+        "description": "flowchart.explain_equation_calculation",
+        "peekOfCode": "def fit_equation_detailed(times, values, conc_name):\n    \"\"\"\n    각 농도별로 방정식을 구하는 상세한 과정을 보여줍니다\n    \"\"\"\n    print(f\"\\n{'='*70}\")\n    print(f\"🔬 농도: {conc_name}\")\n    print(f\"{'='*70}\")\n    # 1단계: 데이터 확인\n    print(f\"\\n📊 1단계: Raw 데이터 확인\")\n    print(f\"   시간 포인트 수: {len(times)}\")",
+        "detail": "flowchart.explain_equation_calculation",
+        "documentation": {}
+    },
+    {
+        "label": "main",
+        "kind": 2,
+        "importPath": "flowchart.explain_equation_calculation",
+        "description": "flowchart.explain_equation_calculation",
+        "peekOfCode": "def main():\n    \"\"\"메인 함수\"\"\"\n    print(\"=\" * 70)\n    print(\"📚 MM_calibration_equations.csv 방정식 계산 과정 설명\")\n    print(\"=\" * 70)\n    print(\"\\n이 스크립트는 prep_raw.csv에서 각 농도별 시간 곡선을 피팅하여\")\n    print(\"MM_calibration_equations.csv의 방정식을 어떻게 구하는지 보여줍니다.\\n\")\n    # Raw 데이터 읽기\n    print(\"📂 Raw 데이터 읽는 중...\")\n    raw_data = read_raw_data('prep_data/prep_raw.csv')",
+        "detail": "flowchart.explain_equation_calculation",
+        "documentation": {}
+    },
+    {
+        "label": "extract_mermaid_code",
+        "kind": 2,
+        "importPath": "flowchart.export_flowchart",
+        "description": "flowchart.export_flowchart",
+        "peekOfCode": "def extract_mermaid_code(md_file: str) -> str:\n    \"\"\"Markdown 파일에서 mermaid 코드 블록 추출\"\"\"\n    with open(md_file, 'r', encoding='utf-8') as f:\n        content = f.read()\n    # mermaid 코드 블록 찾기\n    pattern = r'```mermaid\\n(.*?)\\n```'\n    match = re.search(pattern, content, re.DOTALL)\n    if match:\n        return match.group(1).strip()\n    else:",
+        "detail": "flowchart.export_flowchart",
+        "documentation": {}
+    },
+    {
+        "label": "export_mermaid_to_image",
+        "kind": 2,
+        "importPath": "flowchart.export_flowchart",
+        "description": "flowchart.export_flowchart",
+        "peekOfCode": "def export_mermaid_to_image(mermaid_code: str, output_file: str = \"normalization_flowchart.png\"):\n    \"\"\"\n    Mermaid 코드를 이미지로 변환하여 저장\n    방법 1: Mermaid.ink API 사용 (간단)\n    방법 2: Playwright 사용 (로컬, 고품질)\n    \"\"\"\n    # Mermaid 코드를 base64로 인코딩\n    mermaid_b64 = base64.urlsafe_b64encode(mermaid_code.encode('utf-8')).decode('utf-8')\n    # Mermaid.ink API URL\n    api_url = f\"https://mermaid.ink/img/{mermaid_b64}\"",
+        "detail": "flowchart.export_flowchart",
+        "documentation": {}
+    },
+    {
+        "label": "main",
+        "kind": 2,
+        "importPath": "flowchart.export_flowchart",
+        "description": "flowchart.export_flowchart",
+        "peekOfCode": "def main():\n    \"\"\"메인 함수\"\"\"\n    md_file = \"normalization_flowchart.md\"\n    output_file = \"normalization_flowchart.png\"\n    print(f\"📄 파일 읽는 중: {md_file}\")\n    try:\n        # Mermaid 코드 추출\n        mermaid_code = extract_mermaid_code(md_file)\n        print(f\"✅ Mermaid 코드 추출 완료 ({len(mermaid_code)} 글자)\")\n        # 이미지로 변환",
+        "detail": "flowchart.export_flowchart",
+        "documentation": {}
+    },
+    {
+        "label": "ModelResults",
+        "kind": 6,
+        "importPath": "mode_general_analysis.analysis",
+        "description": "mode_general_analysis.analysis",
+        "peekOfCode": "class ModelResults:\n    \"\"\"Container for model fitting results\"\"\"\n    name: str\n    params: Dict[str, float]\n    params_std: Dict[str, float]\n    aic: float\n    bic: float\n    r_squared: float\n    rmse: float\n    predictions: np.ndarray",
+        "detail": "mode_general_analysis.analysis",
+        "documentation": {}
+    },
+    {
+        "label": "UnitStandardizer",
+        "kind": 6,
+        "importPath": "mode_general_analysis.analysis",
+        "description": "mode_general_analysis.analysis",
+        "peekOfCode": "class UnitStandardizer:\n    \"\"\"\n    Step 2: Standardize units\n    1) Time: min/sec → time_s (seconds)\n    2) Concentration: μg/mL, ng/mL → μM, nM (molar concentration)\n       - Requires molecular weight (MW) for conversion\n    3) Fluorescence: RFU or FL_intensity (no conversion, just column selection)\n    \"\"\"\n    def __init__(self, enzyme_mw: float = 56.6):\n        \"\"\"",
+        "detail": "mode_general_analysis.analysis",
+        "documentation": {}
+    },
+    {
+        "label": "RegionDivider",
+        "kind": 6,
+        "importPath": "mode_general_analysis.analysis",
+        "description": "mode_general_analysis.analysis",
+        "peekOfCode": "class RegionDivider:\n    \"\"\"\n    Step 4: Divide kinetic regions\n    Divides normalized data into:\n    1. Initial linear region\n    2. Exponential growth region  \n    3. Plateau region\n    Note: Specific logic to be provided later by user\n    \"\"\"\n    def __init__(self):",
+        "detail": "mode_general_analysis.analysis",
+        "documentation": {}
+    },
+    {
+        "label": "DataNormalizer",
+        "kind": 6,
+        "importPath": "mode_general_analysis.analysis",
+        "description": "mode_general_analysis.analysis",
+        "peekOfCode": "class DataNormalizer:\n    \"\"\"\n    Step 3: Normalization (two stages)\n    Stage 1: Temporary normalization (model-free threshold)\n    - F0 = minimum fluorescence value\n    - Fmax = maximum fluorescence value\n    Stage 2: Final normalization (after region division)\n    - F0 = minimum fluorescence value (same as stage 1)\n    - Fmax = plateau region average (or F∞ from exponential region if no plateau)\n    \"\"\"",
+        "detail": "mode_general_analysis.analysis",
+        "documentation": {}
+    },
+    {
+        "label": "ModelA_SubstrateDepletion",
+        "kind": 6,
+        "importPath": "mode_general_analysis.analysis",
+        "description": "mode_general_analysis.analysis",
+        "peekOfCode": "class ModelA_SubstrateDepletion:\n    \"\"\"\n    Model A: Substrate Depletion\n    Surface reaction with immobilized substrate:\n    dΓ/dt = -v = -(kcat * Es * Γ) / (KM + Γ)\n    Simplified (Γ << KM): dΓ/dt = -kobs * Γ\n    where kobs ≈ (kcat/KM) * Es\n    Solution: α(t) = 1 - exp(-kobs * t)\n    With mass transfer: Es ≈ Eb / (1 + Da), Da = (kcat*Γ0)/(KM*km)\n    Parameters to fit:",
+        "detail": "mode_general_analysis.analysis",
+        "documentation": {}
+    },
+    {
+        "label": "ModelB_EnzymeDeactivation",
+        "kind": 6,
+        "importPath": "mode_general_analysis.analysis",
+        "description": "mode_general_analysis.analysis",
+        "peekOfCode": "class ModelB_EnzymeDeactivation:\n    \"\"\"\n    Model B: Enzyme Deactivation\n    Active enzyme decays: dE/dt = -kd * E → E(t) = E0 * exp(-kd*t)\n    Surface reaction: dΓ/dt = -(kcat/KM) * E(t) * Γ\n    For Γ << KM (first order in Γ):\n    α(t) = α∞ * [1 - exp(-kobs*t)], where α∞ < 1 if enzyme deactivates fast\n    Or integrated: α(t) = (kcat/KM)*E0/kd * [1 - exp(-kd*t)] when Γ>>KM\n    Approximate: α(t) ≈ 1 - exp[-(kcat/KM)*E0/kd * (1 - exp(-kd*t))]\n    Parameters to fit:",
+        "detail": "mode_general_analysis.analysis",
+        "documentation": {}
+    },
+    {
+        "label": "ModelC_MassTransfer",
+        "kind": 6,
+        "importPath": "mode_general_analysis.analysis",
+        "description": "mode_general_analysis.analysis",
+        "peekOfCode": "class ModelC_MassTransfer:\n    \"\"\"\n    Model C: Mass-Transfer Limitation\n    Diffusion-limited enzyme delivery to surface\n    Simplified using mass transfer coefficient km:\n    Flux: J = km * (Eb - Es)\n    Surface reaction: v = (kcat/KM) * Es * Γ\n    Damköhler number: Da = (kcat*Γ0) / (KM*km)\n    For high Da (reaction >> diffusion):\n    Es << Eb, reaction is diffusion-controlled",
+        "detail": "mode_general_analysis.analysis",
+        "documentation": {}
+    },
+    {
+        "label": "ModelD_ConcentrationDependentFmax",
+        "kind": 6,
+        "importPath": "mode_general_analysis.analysis",
+        "description": "mode_general_analysis.analysis",
+        "peekOfCode": "class ModelD_ConcentrationDependentFmax:\n    \"\"\"\n    Model D: Concentration-Dependent Maximum Cleavage (농도 의존적 Fmax)\n    Hypothesis: 효소 농도가 높을수록 더 깊은 겔 층까지 침투하여 더 많은 기질을 절단\n    Physical basis:\n    - 확산 침투 깊이: δ ∝ √(D*t) but also depends on reaction rate\n    - 높은 [E]에서 더 큰 농도 구배 → 더 깊은 침투\n    - 생성물 방출/2차 절단: 높은 [E]에서 작은 조각으로 분해되어 방출 증가\n    Model equation:\n    α(t) = α_max([E]) * [1 - exp(-kobs*t)]",
+        "detail": "mode_general_analysis.analysis",
+        "documentation": {}
+    },
+    {
+        "label": "ModelE_ProductInhibition",
+        "kind": 6,
+        "importPath": "mode_general_analysis.analysis",
+        "description": "mode_general_analysis.analysis",
+        "peekOfCode": "class ModelE_ProductInhibition:\n    \"\"\"\n    Model E: Product Inhibition (생성물 억제)\n    Hypothesis: 절단된 펩타이드 조각(생성물)이 효소를 경쟁적으로 억제\n    Physical basis:\n    - 생성물이 활성 부위에 결합하여 억제\n    - 생성물이 겔/표면에 축적 (느린 확산/방출)\n    - 높은 [E]에서는 2차 절단으로 작은 조각 생성 → 억제 감소\n    Reaction scheme:\n    S + E ⇌ ES → P + E",
+        "detail": "mode_general_analysis.analysis",
+        "documentation": {}
+    },
+    {
+        "label": "ModelF_EnzymeSurfaceSequestration",
+        "kind": 6,
+        "importPath": "mode_general_analysis.analysis",
+        "description": "mode_general_analysis.analysis",
+        "peekOfCode": "class ModelF_EnzymeSurfaceSequestration:\n    \"\"\"\n    Model F: Enzyme Surface Sequestration/Adsorption (효소 표면 흡착/격리)\n    Hypothesis: 효소가 겔/표면에 비특이적으로 흡착되어 비가역적으로 비활성화\n    Physical basis:\n    - PDA·음전하 표면에 양전하 효소 흡착\n    - 겔 망상구조에 물리적 포획\n    - 높은 [E]에서 포화/경쟁으로 상대적 영향 감소\n    Model:\n    E_free(t) = E0 * exp(-k_ads * t) / (1 + K_ads * E0)",
+        "detail": "mode_general_analysis.analysis",
+        "documentation": {}
+    },
+    {
+        "label": "Visualizer",
+        "kind": 6,
+        "importPath": "mode_general_analysis.plot",
+        "description": "mode_general_analysis.plot",
+        "peekOfCode": "class Visualizer:\n    \"\"\"Visualization tools for model comparison\"\"\"\n    @staticmethod\n    def _detect_conc_col(df: pd.DataFrame) -> str:\n        \"\"\"Detect concentration column name robustly.\"\"\"\n        if 'conc_col_name' in df.columns:\n            name = df['conc_col_name'].iloc[0]\n            if isinstance(name, str) and name in df.columns:\n                return name\n        # Fallback candidates",
+        "detail": "mode_general_analysis.plot",
+        "documentation": {}
+    },
+    {
+        "label": "read_raw_data",
+        "kind": 2,
+        "importPath": "mode_prep_raw_data.prep",
+        "description": "mode_prep_raw_data.prep",
+        "peekOfCode": "def read_raw_data(filename='mode_prep_raw_data/raw.csv'):\n    \"\"\"\n    raw.csv/xlsx에서 원본 데이터 읽기 및 정리\n    지원하는 형식:\n    1. 기존 형식 (탭 구분):\n       - 첫 번째 행: 농도 값들 (각 농도가 mean, SD, N으로 3번 반복)\n       - 두 번째 행: 컬럼 헤더 (time_min, mean, SD, N, mean, SD, N, ...)\n       - 세 번째 행부터: 실제 데이터\n    2. 새로운 형식 (쉼표 구분):\n       - 첫 번째 행: 헤더 (concentration_uM, min, RFU_min, SD, N)",
+        "detail": "mode_prep_raw_data.prep",
+        "documentation": {}
+    },
+    {
+        "label": "calculate_initial_velocity_optimized",
+        "kind": 2,
+        "importPath": "mode_prep_raw_data.prep",
+        "description": "mode_prep_raw_data.prep",
+        "peekOfCode": "def calculate_initial_velocity_optimized(times, values, min_points=3, conversion_threshold=0.1, skip_initial_points=0):\n    \"\"\"\n    정확한 초기 속도 계산: 기질 전환율(conversion) ≤ 5–10% 구간만 사용\n    FRET 기준: F(t)/F∞ ≤ 0.05–0.1 인 구간까지만 사용하여 linear regression 수행\n    Parameters:\n    - times: 시간 배열 (분 또는 초)\n    - values: 형광값 배열\n    - min_points: 최소 데이터 포인트 수\n    - conversion_threshold: 전환율 임계값 (기본값: 0.1 = 10%)\n    - skip_initial_points: 초기 몇 개 포인트 건너뛰기 (lag/settling 제거용, 기본값: 0)",
+        "detail": "mode_prep_raw_data.prep",
+        "documentation": {}
+    },
+    {
+        "label": "calculate_initial_velocity",
+        "kind": 2,
+        "importPath": "mode_prep_raw_data.prep",
+        "description": "mode_prep_raw_data.prep",
+        "peekOfCode": "def calculate_initial_velocity(times, values, linear_fraction=0.2, min_points=3):\n    \"\"\"\n    Quenched peptide protease kinetics: 초기 속도 계산\n    시간-형광 그래프에서 선형 구간의 기울기를 계산하여 초기 속도(v0)를 구합니다.\n    Parameters:\n    - times: 시간 배열 (분 또는 초)\n    - values: 형광값 배열\n    - linear_fraction: 선형 구간으로 사용할 초기 데이터 비율 (기본값: 0.2 = 처음 20%)\n    - min_points: 최소 데이터 포인트 수\n    Returns:",
+        "detail": "mode_prep_raw_data.prep",
+        "documentation": {}
+    },
+    {
+        "label": "fit_time_course",
+        "kind": 2,
+        "importPath": "mode_prep_raw_data.prep",
+        "description": "mode_prep_raw_data.prep",
+        "peekOfCode": "def fit_time_course(times, values, model='linear', use_optimized=True):\n    \"\"\"\n    Quenched peptide protease kinetics: 초기 속도 계산\n    시간-형광 그래프에서 선형 구간의 기울기를 계산합니다.\n    MM 방정식은 시간-형광 데이터에 직접 적용하지 않습니다.\n    Parameters:\n    - times: 시간 배열\n    - values: 형광값 배열\n    - model: 'linear' (선형 구간 분석만 수행)\n    - use_optimized: True면 (F∞-F0)의 5-10% 범위에서 최적화, False면 기존 방식",
+        "detail": "mode_prep_raw_data.prep",
+        "documentation": {}
+    },
+    {
+        "label": "michaelis_menten_calibration",
+        "kind": 2,
+        "importPath": "mode_prep_raw_data.prep",
+        "description": "mode_prep_raw_data.prep",
+        "peekOfCode": "def michaelis_menten_calibration(x, Vmax_cal, Km_cal):\n    \"\"\"\n    Calibration Curve: Michaelis-Menten 방정식\n    y = (Vmax * x) / (Km + x)\n    Parameters:\n    - x: 농도\n    - Vmax_cal: 최대 응답\n    - Km_cal: 반속도 농도 (Michaelis 상수)\n    \"\"\"\n    return (Vmax_cal * x) / (Km_cal + x)",
+        "detail": "mode_prep_raw_data.prep",
+        "documentation": {}
+    },
+    {
+        "label": "fit_calibration_curve",
+        "kind": 2,
+        "importPath": "mode_prep_raw_data.prep",
+        "description": "mode_prep_raw_data.prep",
+        "peekOfCode": "def fit_calibration_curve(concentrations, responses):\n    \"\"\"\n    농도 vs 응답 데이터에 calibration curve 피팅\n    Parameters:\n    - concentrations: 농도 배열\n    - responses: 응답 배열 (Vmax 또는 형광값)\n    Returns:\n    - params: Vmax_cal, Km_cal\n    - fit_values: 피팅된 값\n    - equation: 방정식 문자열",
+        "detail": "mode_prep_raw_data.prep",
+        "documentation": {}
+    },
+    {
+        "label": "main",
+        "kind": 2,
+        "importPath": "mode_prep_raw_data.prep",
+        "description": "mode_prep_raw_data.prep",
+        "peekOfCode": "def main():\n    \"\"\"메인 함수\"\"\"\n    print(\"📊 Michaelis-Menten Calibration Curve Generator\")\n    print(\"=\" * 70)\n    # 1. Raw data 읽기\n    print(\"\\n1️⃣ Raw data 파일 읽는 중...\")\n    try:\n        raw_data = read_raw_data('mode_prep_raw_data/raw.csv')\n        print(f\"   ✅ {len(raw_data)}개 농도 조건 발견\")\n        for conc_name, data in raw_data.items():",
+        "detail": "mode_prep_raw_data.prep",
+        "documentation": {}
+    },
+    {
+        "label": "plot_calibration_curve",
+        "kind": 2,
+        "importPath": "mode_prep_raw_data.prep",
+        "description": "mode_prep_raw_data.prep",
+        "peekOfCode": "def plot_calibration_curve(cal_curve_df, results_df, cal_params, cal_equation):\n    \"\"\"\n    Calibration curve 그래프를 그리고 PNG로 저장\n    (v0 vs [S]에 MM 방정식 피팅)\n    \"\"\"\n    fig, ax = plt.subplots(figsize=(10, 7))\n    # Calibration curve 그리기\n    ax.plot(\n        cal_curve_df['Concentration_ug/mL'],\n        cal_curve_df['v0_Fitted'],",
+        "detail": "mode_prep_raw_data.prep",
+        "documentation": {}
+    },
+    {
+        "label": "main",
+        "kind": 2,
+        "importPath": "app",
+        "description": "app",
+        "peekOfCode": "def main():\n    \"\"\"Main Streamlit app\"\"\"\n    st.set_page_config(\n        page_title=\"Hydrogel FRET Advanced Analysis\",\n        page_icon=\"🔬\",\n        layout=\"wide\"\n    )\n    st.title(\"🔬  FRET Protease Simulation\")\n    st.markdown(\"---\")\n    # Mode selection",
+        "detail": "app",
+        "documentation": {}
+    },
+    {
+        "label": "plt.rcParams['font.family']",
+        "kind": 5,
+        "importPath": "app",
+        "description": "app",
+        "peekOfCode": "plt.rcParams['font.family'] = 'DejaVu Sans'\nsns.set_style(\"whitegrid\")\ndef main():\n    \"\"\"Main Streamlit app\"\"\"\n    st.set_page_config(\n        page_title=\"Hydrogel FRET Advanced Analysis\",\n        page_icon=\"🔬\",\n        layout=\"wide\"\n    )\n    st.title(\"🔬  FRET Protease Simulation\")",
+        "detail": "app",
+        "documentation": {}
+    }
+]

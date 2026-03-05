@@ -556,7 +556,7 @@ def data_load_mode(st):
     st.sidebar.subheader("🔬 Experiment Condition")
     experiment_type = st.sidebar.radio(
         "Experiment Type",
-        ["Substrate Concentration Variation (Standard MM)", "Enzyme Concentration Variation (Substrate Fixed)"],
+        ["Substrate Concentration Variation (Standard MM)", "Enzyme Concentration Variation (Fixed substrate)"],
         help="Substrate Concentration Variation: Standard MM applicable | Enzyme Concentration Variation: Standard MM not applicable, linear relationship"
     )
     
@@ -565,7 +565,7 @@ def data_load_mode(st):
         sample_file_path = "raw/raw_substrate.csv"
         sample_file_name = "raw_substrate_sample.xlsx"
         sample_file_label = "Download Sample raw_substrate.xlsx"
-    else:  # Enzyme Concentration Variation (Substrate Fixed)
+    else:  # Enzyme Concentration Variation (Fixed substrate)
         sample_file_path = "raw/raw_enzyme.csv"
         sample_file_name = "raw_enzyme_sample.xlsx"
         sample_file_label = "Download Sample raw_enzyme.xlsx"
@@ -627,7 +627,7 @@ def data_load_mode(st):
                 str(Path(__file__).parent.parent / 'raw' / 'raw_substrate.csv'),  # Script directory
             ]
             default_sample_name = "raw/raw_substrate.csv"
-        else:  # Enzyme Concentration Variation (Substrate Fixed)
+        else:  # Enzyme Concentration Variation (Fixed substrate)
             default_sample_paths = [
                 'raw/raw_enzyme.csv',  # Current working directory
                 str(Path(__file__).parent.parent / 'raw' / 'raw_enzyme.csv'),  # Script directory
@@ -725,7 +725,7 @@ def data_load_mode(st):
         else:
             st.info("데이터가 없습니다.")
     
-    if experiment_type == "Enzyme Concentration Variation (Substrate Fixed)":
+    if experiment_type == "Enzyme Concentration Variation (Fixed substrate)":
         st.sidebar.warning("""
         ⚠️ **Substrate 고정 + Enzyme 농도 변화 실험**
         
@@ -927,7 +927,7 @@ def data_load_mode(st):
                         cal_equation = "데이터 부족 (최소 2개 농도 필요)"
                         mm_fit_success = False
                 
-                else:  # Enzyme Concentration Variation (Substrate Fixed)
+                else:  # Enzyme Concentration Variation (Fixed substrate)
                     status_text.text("4️⃣ Fitting v₀ vs [E] linear... (not standard MM)")
                     
                     # 농도와 초기 속도 데이터 수집
@@ -1328,7 +1328,7 @@ def data_load_mode(st):
                     st.info(f"**MM Equation:** {mm_fit['equation']}")
                 else:
                     # Display Enzyme concentration variation results
-                    st.warning("⚠️ **Substrate Fixed + Enzyme Concentration Variation Experiment** (not standard MM)")
+                    st.warning("⚠️ **Fixed substrate + Enzyme Concentration Variation Experiment** (not standard MM)")
                     
                     col1, col2, col3 = st.columns(3)
                     with col1:
@@ -2420,8 +2420,8 @@ def data_load_mode(st):
                                     zf.writestr(f"{name}.png", img_bytes)
                                 except Exception as img_err:
                                     err_msg = str(img_err)
-                                    if "kaleido" in err_msg.lower():
-                                        err_msg += " kaleido 설치 후에는 Streamlit 앱을 한 번 종료했다가 다시 실행해주세요."
+                                    if "kaleido" in err_msg.lower() or "chrome" in err_msg.lower():
+                                        err_msg += " → Chrome 설치 불필요. 터미널에서 'pip install -U kaleido' 실행 후 Streamlit 앱을 재시작해주세요. (kaleido 0.2+는 Chrome 없이 동작합니다.)"
                                     st.warning(f"이미지 생성 실패 ({name}): {err_msg}")
                         zip_buffer.seek(0)
                         zip_bytes = zip_buffer.getvalue()

@@ -204,14 +204,14 @@ def exponential_fit_simple(t, F_max, k_obs):
 
 def _conc_to_export_label(conc_value, exp_type):
     """Export용 파일명 라벨 (예: 0.3125ugmL, 10uM)."""
-    if exp_type == "Substrate Concentration Variation (Standard MM)":
+    if exp_type == "Substrate Concentration Variation (Standard Michaelis-Menten)":
         return re.sub(r'[^\w.]', '', f"{conc_value}uM")
     return re.sub(r'[^\w.]', '', f"{conc_value}ugmL")
 
 
 def _build_experimental_fig(results):
     """Experimental Results 탭과 동일한 figure 생성 (export용)."""
-    exp_type = results.get('mm_fit_results', {}).get('experiment_type', 'Substrate Concentration Variation (Standard MM)')
+    exp_type = results.get('mm_fit_results', {}).get('experiment_type', 'Substrate Concentration Variation (Standard Michaelis-Menten)')
     fig = go.Figure()
     colors = ['blue', 'red', 'orange', 'green', 'purple', 'brown', 'pink', 'gray', 'olive', 'cyan']
     conc_col = None
@@ -238,7 +238,10 @@ def _build_experimental_fig(results):
         legend=dict(orientation="v", yanchor="bottom", y=0.05, xanchor="right", x=0.99,
                    bgcolor="rgba(0,0,0,0)", bordercolor="rgba(0,0,0,0)", borderwidth=0, font=dict(color="black"))
     )
-    fig.update_xaxes(range=[results['x_data_min'], results['x_data_max']])
+    x_min, x_max = results['x_data_min'], results['x_data_max']
+    x_span = x_max - x_min
+    x_margin = max(x_span * 0.03, 0.2) if x_span > 0 else 0.2
+    fig.update_xaxes(range=[x_min - x_margin, x_max + x_margin])
     fig.update_yaxes(rangemode='tozero')
     return fig
 
@@ -316,7 +319,7 @@ def _build_norm_fig_uptoy1(norm_data, exp_type):
     fig.add_trace(go.Scatter(x=norm_data['times'], y=norm_data['normalized_values'], mode='markers', name='Normalized data', marker=dict(size=6, color='blue')))
     fig.update_layout(
         xaxis_title='Time (min)', yaxis_title='Fluorescence intensity (a.u.)',
-        title='Enzyme-quenched peptide fluorescence kinetics (up to y=1)', height=600, template='plotly_white',
+        title='Enzyme-quenched peptide fluorescence kinetics up to plateau', height=600, template='plotly_white',
         plot_bgcolor='rgba(0,0,0,0)', paper_bgcolor='rgba(0,0,0,0)', hovermode='x unified',
         yaxis=dict(range=[0, 1.20]), xaxis=dict(range=[t_min, t_display_max]),
         legend=dict(orientation="v", yanchor="bottom", y=0.05, xanchor="right", x=0.99, bgcolor="rgba(0,0,0,0)", bordercolor="rgba(0,0,0,0)", borderwidth=0)
@@ -328,14 +331,14 @@ def _build_v0_fig(results):
     """v₀ vs 농도 / Linear fit figure (export용)."""
     v0_data = results['v0_vs_concentration']
     mm_fit = results['mm_fit_results']
-    exp_type = mm_fit.get('experiment_type', 'Substrate Concentration Variation (Standard MM)')
+    exp_type = mm_fit.get('experiment_type', 'Substrate Concentration Variation (Standard Michaelis-Menten)')
     fig = go.Figure()
     fig.add_trace(go.Scatter(
         x=v0_data['concentrations'], y=v0_data['v0_values'],
         mode='markers', name='Experimental v₀',
         marker=dict(size=10, color='red', line=dict(width=2, color='black'))
     ))
-    if exp_type == "Substrate Concentration Variation (Standard MM)" and mm_fit.get('fit_success') and mm_fit.get('Vmax') is not None and mm_fit.get('Km') is not None:
+    if exp_type == "Substrate Concentration Variation (Standard Michaelis-Menten)" and mm_fit.get('fit_success') and mm_fit.get('Vmax') is not None and mm_fit.get('Km') is not None:
         conc_min, conc_max = min(v0_data['concentrations']), max(v0_data['concentrations'])
         conc_range = np.linspace(conc_min * 0.5, conc_max * 1.5, 200)
         v0_fitted = michaelis_menten_calibration(conc_range, mm_fit['Vmax'], mm_fit['Km'])
@@ -366,7 +369,7 @@ def _build_v0_fig(results):
 def _build_all_export_figures(results):
     """분석에서 생성되는 모든 figure를 (파일명_접미사제외, fig) 리스트로 반환."""
     out = []
-    exp_type = results.get('mm_fit_results', {}).get('experiment_type', 'Substrate Concentration Variation (Standard MM)')
+    exp_type = results.get('mm_fit_results', {}).get('experiment_type', 'Substrate Concentration Variation (Standard Michaelis-Menten)')
     out.append(("Experimental_Results", _build_experimental_fig(results)))
     if 'normalization_results' in results and results['normalization_results']:
         norm_results = results['normalization_results']
@@ -379,7 +382,7 @@ def _build_all_export_figures(results):
             if fig_scaled is not None:
                 out.append((f"Normalization_to_plateau_{conc_label}", fig_scaled))
     if 'v0_vs_concentration' in results and results.get('mm_fit_results', {}).get('fit_success'):
-        if exp_type == "Substrate Concentration Variation (Standard MM)":
+        if exp_type == "Substrate Concentration Variation (Standard Michaelis-Menten)":
             out.append(("v0_vs_S_Fit", _build_v0_fig(results)))
         else:
             out.append(("Linear_fit", _build_v0_fig(results)))
@@ -556,12 +559,12 @@ def data_load_mode(st):
     st.sidebar.subheader("🔬 Experiment Condition")
     experiment_type = st.sidebar.radio(
         "Experiment Type",
-        ["Substrate Concentration Variation (Standard MM)", "Enzyme Concentration Variation (Fixed substrate)"],
-        help="Substrate Concentration Variation: Standard MM applicable | Enzyme Concentration Variation: Standard MM not applicable, linear relationship"
+        ["Substrate Concentration Variation (Standard Michaelis-Menten)", "Enzyme Concentration Variation (Fixed substrate)"],
+        help="Substrate Concentration Variation: Standard Michaelis-Menten applicable | Enzyme Concentration Variation: linear relationship (fixed substrate)"
     )
     
     # Determine sample file path based on experiment type
-    if experiment_type == "Substrate Concentration Variation (Standard MM)":
+    if experiment_type == "Substrate Concentration Variation (Standard Michaelis-Menten)":
         sample_file_path = "raw/raw_substrate.csv"
         sample_file_name = "raw_substrate_sample.xlsx"
         sample_file_label = "Download Sample raw_substrate.xlsx"
@@ -621,7 +624,7 @@ def data_load_mode(st):
         from pathlib import Path
         
         # Determine sample file path based on experiment type
-        if experiment_type == "Substrate Concentration Variation (Standard MM)":
+        if experiment_type == "Substrate Concentration Variation (Standard Michaelis-Menten)":
             default_sample_paths = [
                 'raw/raw_substrate.csv',  # Current working directory
                 str(Path(__file__).parent.parent / 'raw' / 'raw_substrate.csv'),  # Script directory
@@ -675,7 +678,7 @@ def data_load_mode(st):
             uploaded_file.seek(0)
         else:
             # 실험 타입에 따라 다른 샘플 파일 사용
-            if experiment_type == "Substrate Concentration Variation (Standard MM)":
+            if experiment_type == "Substrate Concentration Variation (Standard Michaelis-Menten)":
                 default_n_file = 'raw/raw_substrate.csv'
             else:  # Enzyme 농도 변화 (Substrate 고정)
                 default_n_file = 'raw/raw_enzyme.csv'
@@ -738,7 +741,7 @@ def data_load_mode(st):
         """)
     
     # Enzyme 농도 입력 (kcat 계산용, Substrate 농도 변화 실험에서만 필요)
-    if experiment_type == "Substrate Concentration Variation (Standard MM)":
+    if experiment_type == "Substrate Concentration Variation (Standard Michaelis-Menten)":
         st.sidebar.subheader("🧪 Enzyme concentration setting (for kcat calculation)")
         enzyme_conc_input = st.sidebar.number_input(
             "Enzyme concentration [E] (μg/mL)",
@@ -800,7 +803,7 @@ def data_load_mode(st):
                     # 농도 단위 결정: 실험 타입에 따라
                     # Substrate 농도 변화: uM (몰농도)
                     # Enzyme 농도 변화: ug/mL (질량 농도)
-                    if experiment_type == "Substrate Concentration Variation (Standard MM)":
+                    if experiment_type == "Substrate Concentration Variation (Standard Michaelis-Menten)":
                         conc_unit_col = 'Concentration [μM]'
                     else:  # Enzyme 농도 변화
                         conc_unit_col = 'Concentration [ug/mL]'
@@ -843,7 +846,7 @@ def data_load_mode(st):
                 # 농도 단위 결정: 실험 타입에 따라
                 # Substrate 농도 변화: uM (몰농도)
                 # Enzyme 농도 변화: ug/mL (질량 농도)
-                if experiment_type == "Substrate Concentration Variation (Standard MM)":
+                if experiment_type == "Substrate Concentration Variation (Standard Michaelis-Menten)":
                     conc_unit_col = 'Concentration [μM]'
                 else:  # Enzyme 농도 변화
                     conc_unit_col = 'Concentration [ug/mL]'
@@ -859,7 +862,7 @@ def data_load_mode(st):
                     Fmax = params['Fmax']
                     
                     # 실험 타입에 따라 다른 보간 방법 사용
-                    if experiment_type == "Substrate Concentration Variation (Standard MM)":
+                    if experiment_type == "Substrate Concentration Variation (Standard Michaelis-Menten)":
                         # 기질 농도 변화: Michaelis-Menten kinetics에 따른 지수 결합 모델 사용
                         # F(t) = F0 + (Fmax - F0) * [1 - exp(-k*t)]
                         # where k = v0 / (Fmax - F0)
@@ -891,7 +894,7 @@ def data_load_mode(st):
                 progress_bar.progress(0.7)
                 
                 # 4. Fit v₀ vs concentration (varies by experiment condition)
-                if experiment_type == "Substrate Concentration Variation (Standard MM)":
+                if experiment_type == "Substrate Concentration Variation (Standard Michaelis-Menten)":
                     status_text.text("4️⃣ Fitting v₀ vs [S] Michaelis-Menten...")
                     
                     # 농도와 초기 속도 데이터 수집
@@ -987,7 +990,7 @@ def data_load_mode(st):
                 # 농도 단위 결정: 실험 타입에 따라
                 # Substrate 농도 변화: uM (몰농도)
                 # Enzyme 농도 변화: ug/mL (질량 농도)
-                if experiment_type == "Substrate Concentration Variation (Standard MM)":
+                if experiment_type == "Substrate Concentration Variation (Standard Michaelis-Menten)":
                     conc_unit_col = 'Concentration [μM]'
                 else:  # Enzyme 농도 변화
                     conc_unit_col = 'Concentration [ug/mL]'
@@ -1014,7 +1017,7 @@ def data_load_mode(st):
                 enzyme_conc = None
                 
                 # 1) 사용자 입력값 확인
-                if experiment_type == "Substrate Concentration Variation (Standard MM)" and enzyme_conc_input is not None and enzyme_conc_input > 0:
+                if experiment_type == "Substrate Concentration Variation (Standard Michaelis-Menten)" and enzyme_conc_input is not None and enzyme_conc_input > 0:
                     enzyme_conc = enzyme_conc_input
                 
                 # 2) xlsx 파일에서 읽기 시도 (사용자 입력값이 없을 때만)
@@ -1022,7 +1025,11 @@ def data_load_mode(st):
                     try:
                         xlsx_path = 'Michaelis-Menten_calibration_results.xlsx'
                         if os.path.exists(xlsx_path):
-                            df_mm_read = pd.read_excel(xlsx_path, sheet_name='MM Results', engine='openpyxl')
+                            xl_tmp = pd.ExcelFile(xlsx_path, engine='openpyxl')
+                            mm_sheet = 'Model simulation input' if 'Model simulation input' in xl_tmp.sheet_names else ('Analysis mode input' if 'Analysis mode input' in xl_tmp.sheet_names else ('MM Results' if 'MM Results' in xl_tmp.sheet_names else None))
+                            df_mm_read = pd.read_excel(xlsx_path, sheet_name=mm_sheet, engine='openpyxl') if mm_sheet else None
+                            if df_mm_read is None:
+                                df_mm_read = pd.DataFrame()
                             # enzyme 농도 컬럼 찾기 (다양한 이름 시도)
                             enzyme_conc_col = None
                             for col in ['Enzyme [ug/mL]', 'Enzyme_ug/mL', 'enzyme_ug/mL', '[E] (ug/mL)', 'E_conc', 'Enzyme']:
@@ -1044,7 +1051,7 @@ def data_load_mode(st):
                     kcat = Vmax / enzyme_conc
                 else:
                     kcat = None
-                    if experiment_type == "Substrate Concentration Variation (Standard MM)" and mm_fit_success and Vmax is not None:
+                    if experiment_type == "Substrate Concentration Variation (Standard Michaelis-Menten)" and mm_fit_success and Vmax is not None:
                         st.sidebar.warning("⚠️ Please enter enzyme concentration for kcat calculation.")
                 
                 # MM 피팅 결과를 별도로 저장
@@ -1136,7 +1143,7 @@ def data_load_mode(st):
                 norm_enzyme_conc = None
                 
                 # 1) 사용자 입력값 확인
-                if experiment_type == "Substrate Concentration Variation (Standard MM)" and enzyme_conc_input is not None and enzyme_conc_input > 0:
+                if experiment_type == "Substrate Concentration Variation (Standard Michaelis-Menten)" and enzyme_conc_input is not None and enzyme_conc_input > 0:
                     norm_enzyme_conc = enzyme_conc_input
                 
                 # 2) xlsx 파일에서 읽기 시도 (사용자 입력값이 없을 때만)
@@ -1144,7 +1151,11 @@ def data_load_mode(st):
                     try:
                         xlsx_path = 'Michaelis-Menten_calibration_results.xlsx'
                         if os.path.exists(xlsx_path):
-                            df_mm_read = pd.read_excel(xlsx_path, sheet_name='MM Results', engine='openpyxl')
+                            xl_tmp = pd.ExcelFile(xlsx_path, engine='openpyxl')
+                            mm_sheet = 'Model simulation input' if 'Model simulation input' in xl_tmp.sheet_names else ('Analysis mode input' if 'Analysis mode input' in xl_tmp.sheet_names else ('MM Results' if 'MM Results' in xl_tmp.sheet_names else None))
+                            df_mm_read = pd.read_excel(xlsx_path, sheet_name=mm_sheet, engine='openpyxl') if mm_sheet else None
+                            if df_mm_read is None:
+                                df_mm_read = pd.DataFrame()
                             # enzyme 농도 컬럼 찾기 (다양한 이름 시도)
                             enzyme_conc_col = None
                             for col in ['Enzyme [ug/mL]', 'Enzyme_ug/mL', 'enzyme_ug/mL', '[E] (ug/mL)', 'E_conc', 'Enzyme']:
@@ -1162,7 +1173,7 @@ def data_load_mode(st):
                         pass
                 
                 # MM fit 재수행 (정규화 기반 v0 사용)
-                if experiment_type == "Substrate Concentration Variation (Standard MM)":
+                if experiment_type == "Substrate Concentration Variation (Standard Michaelis-Menten)":
                     if len(norm_concentrations) >= 2 and len(norm_v0_list) >= 2:
                         try:
                             cal_params, cal_fit_values, cal_equation = fit_calibration_curve(norm_concentrations, norm_v0_list)
@@ -1295,7 +1306,7 @@ def data_load_mode(st):
                 },
                 'experiment_type': experiment_type,
                 'normalization_results': normalization_results,  # 정규화 결과 추가
-                'uploaded_filename': uploaded_file.name if uploaded_file is not None else None  # 다운로드 파일명용
+                'uploaded_filename': os.path.basename(uploaded_file.name) if uploaded_file is not None else None  # 다운로드 파일명용 (경로 제외)
             }
             
             # 결과 적용 플래그 설정
@@ -1311,9 +1322,9 @@ def data_load_mode(st):
             # Display MM fitting results (varies by experiment condition)
             if 'mm_fit_results' in results and results['mm_fit_results']['fit_success']:
                 mm_fit = results['mm_fit_results']
-                exp_type = mm_fit.get('experiment_type', 'Substrate Concentration Variation (Standard MM)')
+                exp_type = mm_fit.get('experiment_type', 'Substrate Concentration Variation (Standard Michaelis-Menten)')
                 
-                if exp_type == "Substrate Concentration Variation (Standard MM)":
+                if exp_type == "Substrate Concentration Variation (Standard Michaelis-Menten)":
                     # 표준 MM 결과 표시 (Substrate는 μM 단위)
                     col1, col2, col3, col4 = st.columns(4)
                     with col1:
@@ -1352,20 +1363,20 @@ def data_load_mode(st):
                     
                     ❌ **Unavailable Parameters:**
                     - **Km**: Substrate concentration gradient required
-                    - **Vmax**: Standard MM definition requires [E] fixed
+                    - **Vmax**: Standard Michaelis-Menten definition requires [E] fixed
                     - **kcat**: Cannot be determined alone (only kcat/Km possible)
                     """)
             elif 'mm_fit_results' in results:
                 st.warning("⚠️ MM fitting failed or insufficient data")
             
             # 탭 구성 (st.tabs 대신 st.radio를 사용하여 상태 제어)
-            exp_type = results.get('mm_fit_results', {}).get('experiment_type', 'Substrate Concentration Variation (Standard MM)')
+            exp_type = results.get('mm_fit_results', {}).get('experiment_type', 'Substrate Concentration Variation (Standard Michaelis-Menten)')
             
             tab_titles = []
-            if exp_type == "Substrate Concentration Variation (Standard MM)":
-                tab_titles = ["📊 Experimental Results", "🔄 Normalization", "📊 v₀ vs [S] Fit", "📋 Data Table"]
+            if exp_type == "Substrate Concentration Variation (Standard Michaelis-Menten)":
+                tab_titles = ["📊 Time–Fluorescence Interpolation Curve", "🔄 Normalization", "📊 v₀ vs [S] Fit", "📋 Data Table"]
             else:
-                tab_titles = ["📊 Experimental Results", "🔄 Normalization", "📊 v₀ vs [E] Linear Fit", "📋 Data Table"]
+                tab_titles = ["📊 Time–Fluorescence Interpolation Curve", "🔄 Normalization", "📊 v₀ vs [E] Linear Fit", "📋 Data Table"]
             
             # 탭 상태 초기화
             if 'current_data_load_tab' not in st.session_state:
@@ -1398,9 +1409,9 @@ def data_load_mode(st):
             # 선택된 탭 상태 업데이트
             st.session_state['current_data_load_tab'] = selected_tab
             
-            # Tab 1: 실험결과 (점만 표시)
+            # Tab 1: Time–Fluorescence Interpolation Curve (실험결과 + Mean & MM curves)
             if selected_tab == tab_titles[0]:
-                # with tab_objects[0]: 대신 직접 렌더링
+                # 1) Experimental Results (with error bars)
                 st.subheader("Experimental Results")
                 
                 fig = go.Figure()
@@ -1430,7 +1441,7 @@ def data_load_mode(st):
                     if conc_match:
                         conc_value = float(conc_match.group(1))
                         # 실험 타입에 따라 단위 결정
-                        if exp_type == "Substrate Concentration Variation (Standard MM)":
+                        if exp_type == "Substrate Concentration Variation (Standard Michaelis-Menten)":
                             legend_name = f"{conc_value} μM"
                         else:  # Enzyme 농도 변화
                             legend_name = f"{conc_value} μg/mL"
@@ -1470,7 +1481,7 @@ def data_load_mode(st):
                                     fig.add_trace(go.Scatter(
                                         x=times_raw,
                                         y=values_raw,
-                                        error_y=dict(type='data', array=sd_values, visible=True),
+                                        error_y=dict(type='data', array=sd_values, visible=True, color=color, thickness=1.5),
                                         mode='markers',
                                         marker=dict(size=0, opacity=0),
                                         legendgroup=conc_name,
@@ -1488,22 +1499,139 @@ def data_load_mode(st):
                     hovermode='x unified',
                     legend=dict(
                         orientation="v",
-                        yanchor="bottom",
-                        y=0.05,
-                        xanchor="right",
-                        x=0.99,
-                        bgcolor="rgba(0,0,0,0)",
+                        yanchor="middle",
+                        y=0.5,
+                        xanchor="left",
+                        x=1.02,
+                        xref="paper",
+                        yref="paper",
+                        bgcolor="rgba(255,255,255,0.95)",
                         bordercolor="rgba(0,0,0,0)",
                         borderwidth=0,
-                        font=dict(color="white")
-                    )
+                        font=dict(size=12, color="#333333"),
+                        traceorder="normal"
+                    ),
+                    margin=dict(r=180),
+                    colorway=colors
                 )
                 
-                # 원본 데이터 시간 범위로 제한
-                fig.update_xaxes(range=[results['x_data_min'], results['x_data_max']])
-                fig.update_yaxes(rangemode='tozero')
+                # 원본 데이터 시간 범위 + 좌우 여유 (min/max 점 잘림 방지)
+                x_min, x_max = results['x_data_min'], results['x_data_max']
+                x_span = x_max - x_min
+                x_margin = max(x_span * 0.03, 0.2) if x_span > 0 else 0.2
+                fig.update_xaxes(range=[x_min - x_margin, x_max + x_margin])
+                # ENZYME 모드: Y=0에서 점이 잘리지 않도록 Y축 하단 여유
+                if exp_type == "Enzyme Concentration Variation (Fixed substrate)" and 'raw_data' in results and results['raw_data']:
+                    all_y = [v for d in results['raw_data'].values() for v in d['value']]
+                    y_max_data = max(all_y) if all_y else 1
+                    y_pad_bottom = max(0.02 * y_max_data, 50)
+                    fig.update_yaxes(range=[-y_pad_bottom, y_max_data * 1.02])
+                else:
+                    fig.update_yaxes(rangemode='tozero')
                 
                 st.plotly_chart(fig, use_container_width=True)
+                
+                # 2) Mean points (SD excluded) + Michaelis-Menten curves
+                st.subheader("Time-Fluorescence Interpolated Curves")
+                fig_mm = go.Figure()
+                interp_df = results.get('interp_df')
+                if interp_df is not None and 'Time_min' in interp_df.columns and 'RFU_Interpolated' in interp_df.columns:
+                    conc_col_interp = 'Concentration [μM]' if 'Concentration [μM]' in interp_df.columns else ('Concentration [ug/mL]' if 'Concentration [ug/mL]' in interp_df.columns else None)
+                    for idx, conc_name in enumerate(conc_order):
+                        color = colors[idx % len(colors)]
+                        conc_match = re.search(r'(\d+\.?\d*)', conc_name)
+                        if conc_match:
+                            conc_value = float(conc_match.group(1))
+                            legend_name = f"{conc_value} μM" if exp_type == "Substrate Concentration Variation (Standard Michaelis-Menten)" else f"{conc_value} μg/mL"
+                        else:
+                            legend_name = conc_name
+                        # Mean points
+                        if 'raw_data' in results and conc_name in results['raw_data']:
+                            raw_conc_data = results['raw_data'][conc_name]
+                            fig_mm.add_trace(go.Scatter(
+                                x=raw_conc_data['time'],
+                                y=raw_conc_data['value'],
+                                mode='markers',
+                                name=legend_name,
+                                marker=dict(size=8, color=color, symbol='circle', line=dict(width=1, color='white')),
+                                legendgroup=conc_name,
+                                showlegend=True
+                            ))
+                            # SD (error bars) when available
+                            if raw_conc_data.get('SD') is not None and exp_type == "Enzyme Concentration Variation (Fixed substrate)":
+                                sd_values = raw_conc_data['SD']
+                                if isinstance(sd_values, (list, np.ndarray)):
+                                    has_nonzero_sd = np.any(np.array(sd_values) > 0)
+                                else:
+                                    has_nonzero_sd = sd_values > 0 if sd_values is not None else False
+                                if has_nonzero_sd:
+                                    fig_mm.add_trace(go.Scatter(
+                                        x=raw_conc_data['time'],
+                                        y=raw_conc_data['value'],
+                                        error_y=dict(type='data', array=sd_values, visible=True, color=color, thickness=1.5),
+                                        mode='markers',
+                                        marker=dict(size=0, opacity=0),
+                                        legendgroup=conc_name,
+                                        showlegend=False
+                                    ))
+                        # Interpolation curve (from interp_df)
+                        if 'Concentration' in interp_df.columns:
+                            curve_df = interp_df[interp_df['Concentration'] == conc_name].sort_values('Time_min')
+                        elif conc_col_interp and conc_col_interp in interp_df.columns and conc_col is not None:
+                            conc_val = results['mm_results'][conc_name]['concentration'] if conc_name in results.get('mm_results', {}) else None
+                            if conc_val is not None:
+                                curve_df = interp_df[interp_df[conc_col_interp] == conc_val].sort_values('Time_min')
+                            else:
+                                curve_df = pd.DataFrame()
+                        else:
+                            curve_df = pd.DataFrame()
+                        if len(curve_df) > 0:
+                            fig_mm.add_trace(go.Scatter(
+                                x=curve_df['Time_min'].values,
+                                y=curve_df['RFU_Interpolated'].values,
+                                mode='lines',
+                                name=legend_name,
+                                line=dict(color=color, width=2, dash='solid'),
+                                legendgroup=conc_name,
+                                showlegend=False
+                            ))
+                    fig_mm.update_layout(
+                        xaxis_title='Time (min)',
+                        yaxis_title='RFU',
+                        height=600,
+                        template='plotly_white',
+                        plot_bgcolor='rgba(0,0,0,0)',
+                        paper_bgcolor='rgba(0,0,0,0)',
+                        hovermode='x unified',
+                        legend=dict(
+                            orientation="v",
+                            yanchor="middle",
+                            y=0.5,
+                            xanchor="left",
+                            x=1.02,
+                            xref="paper",
+                            yref="paper",
+                            bgcolor="rgba(255,255,255,0.95)",
+                            bordercolor="rgba(0,0,0,0)",
+                            borderwidth=0,
+                            font=dict(size=12, color="#333333"),
+                            traceorder="normal"
+                        ),
+                        margin=dict(r=180),
+                        colorway=colors
+                    )
+                    fig_mm.update_xaxes(range=[x_min - x_margin, x_max + x_margin])
+                    # ENZYME 모드: Y=0에서 점이 잘리지 않도록 Y축 하단 여유
+                    if exp_type == "Enzyme Concentration Variation (Fixed substrate)" and 'raw_data' in results and results['raw_data']:
+                        all_y_mm = [v for d in results['raw_data'].values() for v in d['value']]
+                        y_max_mm = max(all_y_mm) if all_y_mm else 1
+                        y_pad_bottom_mm = max(0.02 * y_max_mm, 50)
+                        fig_mm.update_yaxes(range=[-y_pad_bottom_mm, y_max_mm * 1.02])
+                    else:
+                        fig_mm.update_yaxes(rangemode='tozero')
+                    st.plotly_chart(fig_mm, use_container_width=True)
+                else:
+                    st.info("No Michaelis-Menten curves available. Run the model to generate interpolated curves.")
             
             # Tab 2: 정규화
             norm_tab_idx = 1
@@ -1533,14 +1661,14 @@ def data_load_mode(st):
                             st.session_state['normalization_selected_conc_idx'] = 0
                         
                         # 실험 타입에 따라 단위 변환 로직
-                        exp_type = results.get('mm_fit_results', {}).get('experiment_type', 'Substrate Concentration Variation (Standard MM)')
+                        exp_type = results.get('mm_fit_results', {}).get('experiment_type', 'Substrate Concentration Variation (Standard Michaelis-Menten)')
                         
                         # 미리 포맷팅된 옵션 리스트 생성
                         formatted_options = []
                         for i in range(len(conc_order)):
                             conc_name = conc_order[i]
                             conc_value = norm_results[conc_name]['concentration']
-                            if exp_type == "Substrate Concentration Variation (Standard MM)":
+                            if exp_type == "Substrate Concentration Variation (Standard Michaelis-Menten)":
                                 formatted_options.append(f"{conc_value} μM")
                             else:
                                 formatted_options.append(f"{conc_value} μg/mL")
@@ -1615,33 +1743,33 @@ def data_load_mode(st):
                                 # 세로선 추가 (데이터 범위 내에 있는 경우만)
                                 # 각 구간을 화살표와 텍스트로 표시 (배경 없이 흰색 글씨, y 위치를 다르게 설정)
                                 if t_initial <= t_max:
-                                    # 초기 구간 세로선
+                                    # 초기 구간 세로선 (0.1τ) — 보라 점선과 동일하게 보라색으로 표시
                                     fig_norm.add_vline(
                                         x=t_initial,
                                         line_dash="dash",
-                                        line_color="orange"
+                                        line_color="purple"
                                     )
-                                    # 화살표와 텍스트 annotation 추가 (y=1.05, 가장 아래)
+                                    # 화살표·텍스트: 점선 색(보라)과 동일
                                     fig_norm.add_annotation(
                                         x=t_initial,
                                         y=1.05,
-                                        text="초기 구간 (t ≤ 0.1τ)",
+                                        text="Initial Section (t ≤ 0.1τ)",
                                         showarrow=True,
                                         arrowhead=2,
                                         arrowsize=1,
                                         arrowwidth=2,
-                                        arrowcolor="orange",
+                                        arrowcolor="purple",
                                         ax=0,
                                         ay=-30,
-                                        bgcolor="rgba(0,0,0,0)",
-                                        bordercolor="rgba(0,0,0,0)",
-                                        borderwidth=0,
-                                        font=dict(size=11, color="white")
+                                        bgcolor="rgba(255,255,255,0.95)",
+                                        bordercolor="white",
+                                        borderwidth=1,
+                                        font=dict(size=11, color="#333333")
                                     )
                                 
                                 # 지수 구간: 0.1τ와 3τ 사이의 중간 지점에 annotation 추가
                                 if t_exponential_end <= t_max and t_initial <= t_max:
-                                    # 지수 구간 시작과 끝 세로선
+                                    # 지수 구간 시작·끝 세로선 (보라 점선)
                                     fig_norm.add_vline(
                                         x=t_exponential_start,
                                         line_dash="dash",
@@ -1659,7 +1787,7 @@ def data_load_mode(st):
                                         fig_norm.add_annotation(
                                             x=t_exponential_mid,
                                             y=1.10,
-                                            text="지수 구간 (0.1τ < t < 3τ)",
+                                            text="Exponential Section (0.1τ < t < 3τ)",
                                             showarrow=True,
                                             arrowhead=2,
                                             arrowsize=1,
@@ -1667,14 +1795,14 @@ def data_load_mode(st):
                                             arrowcolor="purple",
                                             ax=0,
                                             ay=-30,
-                                            bgcolor="rgba(0,0,0,0)",
-                                            bordercolor="rgba(0,0,0,0)",
-                                            borderwidth=0,
-                                            font=dict(size=11, color="white")
+                                            bgcolor="rgba(255,255,255,0.95)",
+                                            bordercolor="white",
+                                            borderwidth=1,
+                                            font=dict(size=11, color="#333333")
                                         )
                                 
                                 if t_plateau <= t_max:
-                                    # plateau 세로선 추가
+                                    # Plateau 구간 세로선 (3τ) — 갈색 점선, 글씨·화살표도 갈색
                                     fig_norm.add_vline(
                                         x=t_plateau,
                                         line_dash="dash",
@@ -1687,7 +1815,7 @@ def data_load_mode(st):
                                         fig_norm.add_annotation(
                                             x=t_plateau,
                                             y=1.15,
-                                            text="Plateau 구간 (t ≥ 3τ)",
+                                            text="Plateau Section (t ≥ 3τ)",
                                             showarrow=True,
                                             arrowhead=2,
                                             arrowsize=1,
@@ -1695,16 +1823,16 @@ def data_load_mode(st):
                                             arrowcolor="brown",
                                             ax=20,
                                             ay=-30,
-                                            bgcolor="rgba(0,0,0,0)",
-                                            bordercolor="rgba(0,0,0,0)",
-                                            borderwidth=0,
-                                            font=dict(size=11, color="white")
+                                            bgcolor="rgba(255,255,255,0.95)",
+                                            bordercolor="white",
+                                            borderwidth=1,
+                                            font=dict(size=11, color="#333333")
                                         )
                                     else:
                                         fig_norm.add_annotation(
                                             x=t_plateau,
                                             y=1.15,
-                                            text="Plateau 구간 (t ≥ 3τ)",
+                                            text="Plateau Section (t ≥ 3τ)",
                                             showarrow=True,
                                             arrowhead=2,
                                             arrowsize=1,
@@ -1712,10 +1840,10 @@ def data_load_mode(st):
                                             arrowcolor="brown",
                                             ax=0,
                                             ay=-30,
-                                            bgcolor="rgba(0,0,0,0)",
-                                            bordercolor="rgba(0,0,0,0)",
-                                            borderwidth=0,
-                                            font=dict(size=11, color="white")
+                                            bgcolor="rgba(255,255,255,0.95)",
+                                            bordercolor="white",
+                                            borderwidth=1,
+                                            font=dict(size=11, color="#333333")
                                         )
                         
                         fig_norm.update_layout(
@@ -1821,23 +1949,23 @@ def data_load_mode(st):
                                     fig_norm_scaled.add_vline(
                                         x=t_initial_scaled,
                                         line_dash="dash",
-                                        line_color="orange"
+                                        line_color="purple"
                                     )
                                     fig_norm_scaled.add_annotation(
                                         x=t_initial_scaled,
                                         y=1.05,
-                                        text="초기 구간 (t ≤ 0.1τ)",
+                                        text="Initial Section (t ≤ 0.1τ)",
                                         showarrow=True,
                                         arrowhead=2,
                                         arrowsize=1,
                                         arrowwidth=2,
-                                        arrowcolor="orange",
+                                        arrowcolor="purple",
                                         ax=0,
                                         ay=-30,
-                                        bgcolor="rgba(0,0,0,0)",
-                                        bordercolor="rgba(0,0,0,0)",
-                                        borderwidth=0,
-                                        font=dict(size=11, color="white")
+                                        bgcolor="rgba(255,255,255,0.95)",
+                                        bordercolor="white",
+                                        borderwidth=1,
+                                        font=dict(size=11, color="#333333")
                                     )
                                 
                                 if t_exponential_end_scaled <= t_display_max and t_initial_scaled <= t_display_max:
@@ -1855,7 +1983,7 @@ def data_load_mode(st):
                                         fig_norm_scaled.add_annotation(
                                             x=t_exponential_mid_scaled,
                                             y=1.10,
-                                            text="지수 구간 (0.1τ < t < 3τ)",
+                                            text="Exponential Section (0.1τ < t < 3τ)",
                                             showarrow=True,
                                             arrowhead=2,
                                             arrowsize=1,
@@ -1863,10 +1991,10 @@ def data_load_mode(st):
                                             arrowcolor="purple",
                                             ax=0,
                                             ay=-30,
-                                            bgcolor="rgba(0,0,0,0)",
-                                            bordercolor="rgba(0,0,0,0)",
-                                            borderwidth=0,
-                                            font=dict(size=11, color="white")
+                                            bgcolor="rgba(255,255,255,0.95)",
+                                            bordercolor="white",
+                                            borderwidth=1,
+                                            font=dict(size=11, color="#333333")
                                         )
                                 
                                 if t_plateau_scaled <= t_display_max:
@@ -1879,7 +2007,7 @@ def data_load_mode(st):
                                         fig_norm_scaled.add_annotation(
                                             x=t_plateau_scaled,
                                             y=1.15,
-                                            text="Plateau 구간 (t ≥ 3τ)",
+                                            text="Plateau Section (t ≥ 3τ)",
                                             showarrow=True,
                                             arrowhead=2,
                                             arrowsize=1,
@@ -1887,16 +2015,16 @@ def data_load_mode(st):
                                             arrowcolor="brown",
                                             ax=20,
                                             ay=-30,
-                                            bgcolor="rgba(0,0,0,0)",
-                                            bordercolor="rgba(0,0,0,0)",
-                                            borderwidth=0,
-                                            font=dict(size=11, color="white")
+                                            bgcolor="rgba(255,255,255,0.95)",
+                                            bordercolor="white",
+                                            borderwidth=1,
+                                            font=dict(size=11, color="#333333")
                                         )
                                     else:
                                         fig_norm_scaled.add_annotation(
                                             x=t_plateau_scaled,
                                             y=1.15,
-                                            text="Plateau 구간 (t ≥ 3τ)",
+                                            text="Plateau Section (t ≥ 3τ)",
                                             showarrow=True,
                                             arrowhead=2,
                                             arrowsize=1,
@@ -1904,16 +2032,16 @@ def data_load_mode(st):
                                             arrowcolor="brown",
                                             ax=0,
                                             ay=-30,
-                                            bgcolor="rgba(0,0,0,0)",
-                                            bordercolor="rgba(0,0,0,0)",
-                                            borderwidth=0,
-                                            font=dict(size=11, color="white")
+                                            bgcolor="rgba(255,255,255,0.95)",
+                                            bordercolor="white",
+                                            borderwidth=1,
+                                            font=dict(size=11, color="#333333")
                                         )
                                 
                                 fig_norm_scaled.update_layout(
                                     xaxis_title='Time (min)',
                                     yaxis_title='Fluorescence intensity (a.u.)',
-                                    title='Enzyme-quenched peptide fluorescence kinetics (up to y=1)',
+                                    title='Enzyme-quenched peptide fluorescence kinetics up to plateau',
                                     height=600,
                                     template='plotly_white',
                                     plot_bgcolor='rgba(0,0,0,0)',
@@ -1977,9 +2105,9 @@ def data_load_mode(st):
                         # 방정식 및 R² 테이블
                         st.subheader("Normalization Parameters")
                         # 실험 타입에 따라 농도 단위 결정
-                        exp_type = results.get('mm_fit_results', {}).get('experiment_type', 'Substrate Concentration Variation (Standard MM)')
+                        exp_type = results.get('mm_fit_results', {}).get('experiment_type', 'Substrate Concentration Variation (Standard Michaelis-Menten)')
                         conc_value = norm_data['concentration']
-                        if exp_type == "Substrate Concentration Variation (Standard MM)":
+                        if exp_type == "Substrate Concentration Variation (Standard Michaelis-Menten)":
                             conc_display = f"{conc_value} μM"
                         else:  # Enzyme 농도 변화
                             conc_display = f"{conc_value} μg/mL"
@@ -1996,16 +2124,16 @@ def data_load_mode(st):
                             t_exponential_plateau_str = "N/A"
                         
                         param_data = {
-                            '농도': [conc_display],
+                            'Concentration': [conc_display],
                             'F₀': [f"{norm_data['F0']:.4f}"],
                             'F_max': [f"{norm_data['Fmax']:.4f}"],
                             'k_obs': [f"{norm_data['k_obs']:.4f}" if norm_data['k_obs'] is not None else "N/A"],
                             'τ (1/k_obs)': [f"{norm_data['tau']:.4f}" if norm_data['tau'] is not None and not np.isinf(norm_data['tau']) else "N/A"],
-                            '초기→지수 (t=0.1τ)': [t_initial_exponential_str],
-                            '지수→Plateau (t=3τ)': [t_exponential_plateau_str],
+                            'Initial→Exponent (t=0.1τ)': [t_initial_exponential_str],
+                            'Exponent→Plateau (t=3τ)': [t_exponential_plateau_str],
                             'v₀ (RFU/min)': [f"{v0:.2f}" if v0 is not None else "N/A"],
                             'R²': [f"{norm_data['R_squared']:.4f}"],
-                            '방정식': [norm_data['equation']]
+                            'Equation': [norm_data['equation']]
                         }
                         param_df = pd.DataFrame(param_data)
                         st.dataframe(param_df, use_container_width=True, hide_index=True)
@@ -2019,7 +2147,7 @@ def data_load_mode(st):
                             v0_conc = n_data['k_obs'] * (n_data['Fmax'] - n_data['F0']) if n_data['k_obs'] is not None else None
                             # 농도 표시 (실험 타입에 따라 단위 변환)
                             conc_value = n_data['concentration']
-                            if exp_type == "Substrate Concentration Variation (Standard MM)":
+                            if exp_type == "Substrate Concentration Variation (Standard Michaelis-Menten)":
                                 conc_display = f"{conc_value} μM"
                             else:  # Enzyme 농도 변화
                                 conc_display = f"{conc_value} μg/mL"
@@ -2048,18 +2176,18 @@ def data_load_mode(st):
                                 t_exponential_plateau_str_conc = "N/A"
                             
                             summary_data.append({
-                                '농도': conc_display,
+                                'Concentration': conc_display,
                                 'F₀': f"{n_data['F0']:.4f}",
                                 'F_max': f"{n_data['Fmax']:.4f}",
                                 'k_obs': f"{n_data['k_obs']:.4f}" if n_data['k_obs'] is not None else "N/A",
                                 'τ': f"{n_data['tau']:.4f}" if n_data['tau'] is not None and not np.isinf(n_data['tau']) else "N/A",
-                                '초기→지수 (t=0.1τ)': t_initial_exponential_str_conc,
-                                '지수→Plateau (t=3τ)': t_exponential_plateau_str_conc,
+                                'Initial→Exponent (t=0.1τ)': t_initial_exponential_str_conc,
+                                'Exponent→Plateau (t=3τ)': t_exponential_plateau_str_conc,
                                 'v₀ (RFU/min)': f"{v0_conc:.2f}" if v0_conc is not None else "N/A",
-                                'α 범위': alpha_range_str,
-                                'α 평균': alpha_mean_str,
+                                'α Range': alpha_range_str,
+                                'α Mean': alpha_mean_str,
                                 'R²': f"{n_data['R_squared']:.4f}",
-                                '방정식': n_data['equation'][:50] + "..." if len(n_data['equation']) > 50 else n_data['equation']
+                                'Equation': n_data['equation'][:50] + "..." if len(n_data['equation']) > 50 else n_data['equation']
                             })
                         summary_df = pd.DataFrame(summary_data)
                         st.dataframe(summary_df, use_container_width=True, hide_index=True)
@@ -2068,12 +2196,12 @@ def data_load_mode(st):
                     st.info("No normalization results. Please run the 'Run Michaelis-Menten Model' button first.")
             
             # Tab 2: v₀ vs 농도 그래프 (실험 조건에 따라 다름)
-            v0_tab_idx = 2 if exp_type == "Substrate Concentration Variation (Standard MM)" else 2
+            v0_tab_idx = 2 if exp_type == "Substrate Concentration Variation (Standard Michaelis-Menten)" else 2
             if selected_tab == tab_titles[v0_tab_idx]:
                 if 'v0_vs_concentration' in results and 'mm_fit_results' in results:
                     v0_data = results['v0_vs_concentration']
                     mm_fit = results['mm_fit_results']
-                    exp_type = mm_fit.get('experiment_type', 'Substrate Concentration Variation (Standard MM)')
+                    exp_type = mm_fit.get('experiment_type', 'Substrate Concentration Variation (Standard Michaelis-Menten)')
                     
                     fig_v0 = go.Figure()
                     
@@ -2086,7 +2214,7 @@ def data_load_mode(st):
                         marker=dict(size=10, color='red', line=dict(width=2, color='black'))
                     ))
                     
-                    if exp_type == "Substrate Concentration Variation (Standard MM)":
+                    if exp_type == "Substrate Concentration Variation (Standard Michaelis-Menten)":
                         st.subheader("v₀ vs [S] Michaelis-Menten Fit")
                         
                         # 실험 데이터 테이블 (expander)
@@ -2208,7 +2336,7 @@ def data_load_mode(st):
                     st.warning("No v₀ vs concentration data available.")
             
             # 마지막 탭: 데이터 테이블
-            data_tab_idx = 3 if exp_type == "Substrate Concentration Variation (Standard MM)" else 3
+            data_tab_idx = 3 if exp_type == "Substrate Concentration Variation (Standard Michaelis-Menten)" else 3
             if selected_tab == tab_titles[data_tab_idx]:
                 st.subheader("Detailed Parameters")
                 
@@ -2229,7 +2357,7 @@ def data_load_mode(st):
                             v0_norm = norm_data['k_obs'] * (norm_data['Fmax'] - norm_data['F0'])
                         
                         # 실험 타입에 따라 농도 단위 결정
-                        if exp_type == "Substrate Concentration Variation (Standard MM)":
+                        if exp_type == "Substrate Concentration Variation (Standard Michaelis-Menten)":
                             conc_col_name = 'Concentration [μM]'
                         else:
                             conc_col_name = 'Concentration [ug/mL]'
@@ -2249,7 +2377,7 @@ def data_load_mode(st):
                             'R_squared': norm_data['R_squared'],
                             'k_obs': norm_data.get('k_obs', None),
                             'τ': norm_data.get('tau', None),
-                            '방정식': norm_data['equation']
+                            'Equation': norm_data['equation']
                         }
                         
                         detail_data.append(row_data)
@@ -2264,10 +2392,10 @@ def data_load_mode(st):
                 
                 # MM Fit 결과 표시
                 st.markdown("---")
-                st.subheader("MM Fit Results")
+                st.subheader("Michaelis-Menten Fit Results")
                 if 'mm_fit_results' in results and results['mm_fit_results'].get('fit_success'):
                     mm_fit = results['mm_fit_results']
-                    if exp_type == "Substrate Concentration Variation (Standard MM)":
+                    if exp_type == "Substrate Concentration Variation (Standard Michaelis-Menten)":
                         mm_fit_data = {
                             'Parameter': ['Vmax', 'Km (μM)', 'kcat', 'R²'],
                             'Value': [
@@ -2289,7 +2417,7 @@ def data_load_mode(st):
                     mm_fit_df = pd.DataFrame(mm_fit_data)
                     st.dataframe(mm_fit_df, use_container_width=True, hide_index=True)
                 else:
-                    st.warning("No MM Fit results available.")
+                    st.warning("No Michaelis-Menten fit results available.")
                 
                 # 파일 다운로드 버튼
                 st.markdown("---")
@@ -2309,17 +2437,81 @@ def data_load_mode(st):
                         from io import BytesIO
                         output = BytesIO()
                         with pd.ExcelWriter(output, engine='openpyxl') as writer:
-                            download_df.to_excel(writer, sheet_name='MM Results', index=False)
+                            # 1) 첫 번째 시트: Experimental data (원본 raw 데이터)
+                            raw_data = results.get('raw_data', {})
+                            exp_type = results.get('mm_fit_results', {}).get('experiment_type', 'Substrate Concentration Variation (Standard Michaelis-Menten)')
+                            conc_unit = "μM" if exp_type == "Substrate Concentration Variation (Standard Michaelis-Menten)" else "μg/mL"
+                            exp_rows = []
+                            if raw_data:
+                                norm_results = results.get('normalization_results') or {}
+                                mm_results_df = results.get('mm_results_df', pd.DataFrame())
+                                def _conc_sort_key(c):
+                                    if norm_results and c in norm_results:
+                                        return norm_results[c]['concentration']
+                                    for _, row in mm_results_df.iterrows():
+                                        if str(row.get('Concentration', '')) == str(c):
+                                            return row.get('Concentration [μM]', row.get('Concentration [ug/mL]', 0))
+                                    try:
+                                        return float(c)
+                                    except (ValueError, TypeError):
+                                        return 0
+                                conc_order = sorted(raw_data.keys(), key=_conc_sort_key)
+                                for conc_name in conc_order:
+                                    data = raw_data[conc_name]
+                                    conc_val = None
+                                    if norm_results and conc_name in norm_results:
+                                        conc_val = norm_results[conc_name].get('concentration')
+                                    if conc_val is None and not mm_results_df.empty:
+                                        for _, row in mm_results_df.iterrows():
+                                            if str(row.get('Concentration', '')) == str(conc_name):
+                                                conc_val = row.get('Concentration [μM]', row.get('Concentration [ug/mL]'))
+                                                break
+                                    if conc_val is None:
+                                        try:
+                                            conc_val = float(conc_name)
+                                        except (ValueError, TypeError):
+                                            conc_val = conc_name
+                                    conc_display = f"{conc_val} {conc_unit}" if isinstance(conc_val, (int, float)) else str(conc_name)
+                                    for t, v in zip(data['time'], data['value']):
+                                        exp_rows.append({'Concentration': conc_display, 'Time_min': t, 'RFU': v})
+                                if exp_rows:
+                                    pd.DataFrame(exp_rows).to_excel(writer, sheet_name='Experimental data', index=False)
+                                else:
+                                    pd.DataFrame(columns=['Concentration', 'Time_min', 'RFU']).to_excel(writer, sheet_name='Experimental data', index=False)
+                            else:
+                                pd.DataFrame(columns=['Concentration', 'Time_min', 'RFU']).to_excel(writer, sheet_name='Experimental data', index=False)
                             
-                            # Michaelis-Menten Curves 시트: Concentration 컬럼명 수정
+                            # 2) 두 번째 시트: Michaelis-Menten curves (농도별로 concentration, time_min, rfu_interpolated 오른쪽으로 반복)
                             interp_df_copy = results['interp_df'].copy()
-                            # 'Concentration' 컬럼이 있으면 제거 (conc_unit_col 사용)
-                            if 'Concentration' in interp_df_copy.columns:
-                                interp_df_copy = interp_df_copy.drop(columns=['Concentration'])
+                            conc_col = 'Concentration [μM]' if 'Concentration [μM]' in interp_df_copy.columns else ('Concentration [ug/mL]' if 'Concentration [ug/mL]' in interp_df_copy.columns else ('Concentration' if 'Concentration' in interp_df_copy.columns else None))
+                            if conc_col is not None and 'Time_min' in interp_df_copy.columns and 'RFU_Interpolated' in interp_df_copy.columns:
+                                conc_order_interp = interp_df_copy.groupby(conc_col, sort=False).first().reset_index()[conc_col].tolist()
+                                try:
+                                    conc_order_interp = sorted(conc_order_interp, key=lambda x: float(x) if isinstance(x, (int, float)) or (isinstance(x, str) and x.replace('.', '').replace('-', '').isdigit()) else 0)
+                                except Exception:
+                                    pass
+                                wide_cols = []
+                                wide_data = []
+                                for idx, c in enumerate(conc_order_interp):
+                                    sub = interp_df_copy[interp_df_copy[conc_col] == c].sort_values('Time_min').reset_index(drop=True)
+                                    for i in range(len(sub)):
+                                        if i >= len(wide_data):
+                                            wide_data.append({})
+                                        wide_data[i][f'concentration_{idx}'] = sub.iloc[i][conc_col]
+                                        wide_data[i][f'time_min_{idx}'] = sub.iloc[i]['Time_min']
+                                        wide_data[i][f'rfu_interpolated_{idx}'] = sub.iloc[i]['RFU_Interpolated']
+                                    wide_cols.extend([f'concentration_{idx}', f'time_min_{idx}', f'rfu_interpolated_{idx}'])
+                                if wide_data and wide_cols:
+                                    mm_wide_df = pd.DataFrame(wide_data)[wide_cols]
+                                    n_blocks = len(wide_cols) // 3
+                                    mm_wide_df.columns = ['concentration', 'time_min', 'rfu_interpolated'] * n_blocks
+                                else:
+                                    mm_wide_df = interp_df_copy
+                            else:
+                                mm_wide_df = interp_df_copy
+                            mm_wide_df.to_excel(writer, sheet_name='Time–FLU Interpolated curves', index=False)
                             
-                            interp_df_copy.to_excel(writer, sheet_name='Michaelis-Menten Curves', index=False)
-                            
-                            # 정규화 결과 시트 추가
+                            # 3) 세 번째 시트: Normalization results (기존 유지, F₀ → F0)
                             if 'normalization_results' in results and results['normalization_results']:
                                 norm_results = results['normalization_results']
                                 norm_summary_data = []
@@ -2330,30 +2522,30 @@ def data_load_mode(st):
                                     if v0_conc == 0 and n_data.get('k_obs') is not None:
                                         v0_conc = n_data['k_obs'] * (n_data['Fmax'] - n_data['F0'])
                                     
-                                    if exp_type == "Substrate Concentration Variation (Standard MM)":
+                                    if exp_type == "Substrate Concentration Variation (Standard Michaelis-Menten)":
                                         conc_display = f"{conc_value} μM"
                                     else:
                                         conc_display = f"{conc_value} μg/mL"
                                     
                                     norm_summary_data.append({
                                         'Concentration': conc_display,
-                                        'F₀': n_data['F0'],
+                                        'F0': n_data['F0'],
                                         'F_max': n_data['Fmax'],
                                         'k_obs': n_data.get('k_obs', None),
                                         'τ': n_data.get('tau', None),
-                                        'v₀ (RFU/min)': v0_conc,
+                                        'v0 (RFU/min)': v0_conc,
                                         'R²': n_data['R_squared'],
                                         'Equation': n_data['equation']
                                     })
                                 
                                 if norm_summary_data:
                                     norm_summary_df = pd.DataFrame(norm_summary_data)
-                                    norm_summary_df.to_excel(writer, sheet_name='Normalization Results', index=False)
+                                    norm_summary_df.to_excel(writer, sheet_name='Normalization results', index=False)
                             
-                            # MM Fit 결과 시트 추가
+                            # 4) 네 번째 시트: Fit results (기존 그대로)
                             if 'mm_fit_results' in results and results['mm_fit_results'].get('fit_success'):
                                 mm_fit = results['mm_fit_results']
-                                if exp_type == "Substrate Concentration Variation (Standard MM)":
+                                if exp_type == "Substrate Concentration Variation (Standard Michaelis-Menten)":
                                     mm_fit_data = {
                                         'Parameter': ['Vmax', 'Km (μM)', 'kcat', 'R²', 'Equation'],
                                         'Value': [
@@ -2375,20 +2567,26 @@ def data_load_mode(st):
                                         ]
                                     }
                                 mm_fit_df = pd.DataFrame(mm_fit_data)
-                                mm_fit_df.to_excel(writer, sheet_name='MM Fit Results', index=False)
+                                mm_fit_df.to_excel(writer, sheet_name='Fit results', index=False)
+                            
+                            # Model simulation 모드용 시트 (F0, Fmax, v0 등 파라미터)
+                            download_df.to_excel(writer, sheet_name='Model simulation input', index=False)
                         
                         output.seek(0)
                         xlsx_data = output.getvalue()
                         
-                        # 다운로드 파일명: 업로드 파일이 raw_* 이면 results_*.xlsx 로 저장
-                        uploaded_filename = results.get('uploaded_filename') or ''
-                        if uploaded_filename.startswith('raw_'):
-                            base = 'results_' + uploaded_filename[4:].rsplit('.', 1)[0]
-                            xlsx_download_name = base + '.xlsx'
+                        # 다운로드/저장 파일명: 업로드 파일명에 맞춤 (있으면 results_<원본이름>.xlsx, 없으면 기본값)
+                        uploaded_filename = results.get('uploaded_filename') or (uploaded_file.name if uploaded_file is not None else '')
+                        uploaded_filename = os.path.basename(str(uploaded_filename).strip())
+                        if uploaded_filename:
+                            base = uploaded_filename.rsplit('.', 1)[0]
+                            if base.startswith('raw_'):
+                                base = base[4:]  # raw_ 제거
+                            xlsx_download_name = 'results_' + base + '.xlsx'
                         else:
                             xlsx_download_name = 'Michaelis-Menten_calibration_results.xlsx'
                         
-                        # XLSX 파일 자동 저장 (Analysis 모드에서 자동 로드용)
+                        # XLSX 파일 자동 저장 (Model simulation 모드에서 자동 로드용, 고정 파일명)
                         try:
                             with open('Michaelis-Menten_calibration_results.xlsx', 'wb') as f:
                                 f.write(xlsx_data)
@@ -2401,7 +2599,7 @@ def data_load_mode(st):
                             file_name=xlsx_download_name,
                             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
                             use_container_width=True,
-                            help="Full Excel file including MM Results, Normalization Results, MM Fit Results, and Michaelis-Menten Curves sheets."
+                            help="Full Excel: Experimental data, Time–FLU Interpolated curves, Normalization results, Fit results, Model simulation input."
                         )
                     except Exception as e:
                         st.warning(f"Error preparing XLSX download: {e}")

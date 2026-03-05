@@ -20,6 +20,35 @@ from mode_general_analysis.plot import Visualizer
 from mode_prep_raw_data.prep import michaelis_menten_calibration
 
 
+def _wide_mm_curves_to_long(df):
+    """Convert wide-format MM curves (concentration, time_min, rfu_interpolated repeated) to long format."""
+    cols = list(df.columns)
+    if len(cols) < 3 or len(cols) % 3 != 0:
+        return df
+    n_blocks = len(cols) // 3
+    long_rows = []
+    for i in range(len(df)):
+        for b in range(n_blocks):
+            conc_val = df.iloc[i, b * 3]
+            time_val = df.iloc[i, b * 3 + 1]
+            rfu_val = df.iloc[i, b * 3 + 2]
+            long_rows.append({
+                'Concentration': conc_val,
+                'Time_min': time_val,
+                'RFU_Interpolated': rfu_val
+            })
+    out = pd.DataFrame(long_rows)
+    try:
+        out['Concentration [μM]'] = pd.to_numeric(out['Concentration'].astype(str).str.replace('μM', '').str.replace('μg/mL', '').str.strip(), errors='coerce')
+        if out['Concentration [μM]'].notna().any():
+            out = out.drop(columns=['Concentration'], errors='ignore')
+        else:
+            out = out.drop(columns=['Concentration [μM]'], errors='ignore')
+    except Exception:
+        pass
+    return out
+
+
 def verbose_callback(message: str, level: str = "info"):
     """Callback function for logging from analysis modules"""
     if level == "error":
@@ -71,7 +100,7 @@ def general_analysis_mode(st):
     uploaded_file = st.sidebar.file_uploader(
         "Upload CSV/XLSX File (Fitted Curves)",
         type=['csv', 'xlsx'],
-        help="Result file generated from Data Load Mode (CSV or XLSX): For XLSX, use 'Michaelis-Menten Curves' sheet"
+        help="Result file generated from Data Load Mode (CSV or XLSX): For XLSX, use 'Time–FLU Interpolated curves' sheet"
     )
     
     # Download sample Fitted Curves (Data Load Mode results)
@@ -99,8 +128,8 @@ def general_analysis_mode(st):
             df_fitted = results['interp_df'].copy()
             rfu_col = 'RFU_Interpolated' if 'RFU_Interpolated' in df_fitted.columns else 'RFU_Calculated'
             # Check experiment_type to display basis
-            experiment_type = results.get('experiment_type', 'Substrate Concentration Variation (Standard MM)')
-            if experiment_type == "Substrate Concentration Variation (Standard MM)":
+            experiment_type = results.get('experiment_type', 'Substrate Concentration Variation (Standard Michaelis-Menten)')
+            if experiment_type == "Substrate Concentration Variation (Standard Michaelis-Menten)":
                 result_type = "Substrate-based"
             else:
                 result_type = "Enzyme-based"
@@ -120,9 +149,16 @@ def general_analysis_mode(st):
         
         try:
             if file_extension == 'xlsx':
-                # XLSX 파일: "Michaelis-Menten Curves" 시트 읽기
-                df_fitted = pd.read_excel(tmp_path, sheet_name='Michaelis-Menten Curves', engine='openpyxl')
-                rfu_col = 'RFU_Interpolated' if 'RFU_Interpolated' in df_fitted.columns else 'RFU_Calculated'
+                # XLSX 파일: "Time–FLU Interpolated curves" 또는 구 시트명 시트 읽기
+                xl = pd.ExcelFile(tmp_path, engine='openpyxl')
+                curve_sheet = ('Time–FLU Interpolated curves' if 'Time–FLU Interpolated curves' in xl.sheet_names else
+                               ('Michaelis-Menten Curves' if 'Michaelis-Menten Curves' in xl.sheet_names else
+                                ('Michaelis-Menten curves' if 'Michaelis-Menten curves' in xl.sheet_names else None)))
+                df_fitted = pd.read_excel(tmp_path, sheet_name=curve_sheet, engine='openpyxl') if curve_sheet else pd.read_excel(tmp_path, sheet_name=1, engine='openpyxl')
+                c0, c1, c2 = (df_fitted.columns[0], df_fitted.columns[1], df_fitted.columns[2]) if len(df_fitted.columns) >= 3 else (None, None, None)
+                if c0 is not None and 'concentration' in str(c0).lower() and 'time_min' in str(c1).lower() and 'rfu_interpolated' in str(c2).lower() and len(df_fitted.columns) % 3 == 0:
+                    df_fitted = _wide_mm_curves_to_long(df_fitted)
+                rfu_col = 'RFU_Interpolated' if 'RFU_Interpolated' in df_fitted.columns else ('rfu_interpolated' if 'rfu_interpolated' in df_fitted.columns else 'RFU_Calculated')
             else:
                 # CSV 파일
                 df_fitted = pd.read_csv(tmp_path)
@@ -145,8 +181,15 @@ def general_analysis_mode(st):
         for path in xlsx_paths:
             try:
                 if os.path.exists(path):
-                    df_fitted = pd.read_excel(path, sheet_name='Michaelis-Menten Curves', engine='openpyxl')
-                    rfu_col = 'RFU_Interpolated' if 'RFU_Interpolated' in df_fitted.columns else 'RFU_Calculated'
+                    xl = pd.ExcelFile(path, engine='openpyxl')
+                    curve_sheet = ('Time–FLU Interpolated curves' if 'Time–FLU Interpolated curves' in xl.sheet_names else
+                                   ('Michaelis-Menten Curves' if 'Michaelis-Menten Curves' in xl.sheet_names else
+                                    ('Michaelis-Menten curves' if 'Michaelis-Menten curves' in xl.sheet_names else None)))
+                    df_fitted = pd.read_excel(path, sheet_name=curve_sheet or 'Time–FLU Interpolated curves', engine='openpyxl') if curve_sheet else pd.read_excel(path, sheet_name=1, engine='openpyxl')
+                    c0, c1, c2 = (df_fitted.columns[0], df_fitted.columns[1], df_fitted.columns[2]) if len(df_fitted.columns) >= 3 else (None, None, None)
+                    if c0 is not None and 'concentration' in str(c0).lower() and 'time_min' in str(c1).lower() and 'rfu_interpolated' in str(c2).lower() and len(df_fitted.columns) % 3 == 0:
+                        df_fitted = _wide_mm_curves_to_long(df_fitted)
+                    rfu_col = 'RFU_Interpolated' if 'RFU_Interpolated' in df_fitted.columns else ('rfu_interpolated' if 'rfu_interpolated' in df_fitted.columns else 'RFU_Calculated')
                     break
             except Exception:
                 continue
@@ -331,8 +374,10 @@ def general_analysis_mode(st):
     # MM Results 시트 읽기
     if xlsx_path_for_mm_results is not None:
         try:
-            # 1. MM Results (F0, Fmax, v0)
-            df_mm_results = pd.read_excel(xlsx_path_for_mm_results, sheet_name='MM Results', engine='openpyxl')
+            # 1. Model simulation input (또는 구파일 호환 MM Results) — F0, Fmax, v0
+            xl_mm = pd.ExcelFile(xlsx_path_for_mm_results, engine='openpyxl')
+            mm_sheet = 'Model simulation input' if 'Model simulation input' in xl_mm.sheet_names else ('Analysis mode input' if 'Analysis mode input' in xl_mm.sheet_names else ('MM Results' if 'MM Results' in xl_mm.sheet_names else None))
+            df_mm_results = pd.read_excel(xlsx_path_for_mm_results, sheet_name=mm_sheet, engine='openpyxl') if mm_sheet else None
             
             if df_mm_results is not None and 'F0' in df_mm_results.columns and 'Fmax' in df_mm_results.columns:
                 fitted_params = {}
@@ -355,7 +400,7 @@ def general_analysis_mode(st):
                                 }
                             
                             # v0
-                            v0_val = row.get('v0') if 'v0' in row else row.get('v0 (RFU/min)')
+                            v0_val = row.get('v0', row.get('v0 (RFU/min)', row.get('v₀ (RFU/min)')))
                             if pd.notna(v0_val):
                                 v0_concs.append(conc_float)
                                 v0_vals.append(float(v0_val))
@@ -382,11 +427,12 @@ def general_analysis_mode(st):
                 fitted_params = None
                 st.session_state['fitted_params'] = None
 
-            # 2. MM Fit Results (Vmax, Km)
+            # 2. Michaelis-Menten Fit Results (Vmax, Km)
             try:
                 xl = pd.ExcelFile(xlsx_path_for_mm_results)
-                if 'MM Fit Results' in xl.sheet_names:
-                    df_fit = pd.read_excel(xlsx_path_for_mm_results, sheet_name='MM Fit Results', engine='openpyxl')
+                fit_sheet = 'Michaelis-Menten Fit Results' if 'Michaelis-Menten Fit Results' in xl.sheet_names else ('Fit results' if 'Fit results' in xl.sheet_names else ('MM Fit Results' if 'MM Fit Results' in xl.sheet_names else None))
+                if fit_sheet:
+                    df_fit = pd.read_excel(xlsx_path_for_mm_results, sheet_name=fit_sheet, engine='openpyxl')
                     mm_fit_from_file = {}
                     
                     # Determine columns
@@ -598,8 +644,9 @@ def general_analysis_mode(st):
                 try:
                     # Normalization Results 시트 시도
                     xl = pd.ExcelFile(xlsx_path_for_norm)
-                    if 'Normalization Results' in xl.sheet_names:
-                        df_norm = pd.read_excel(xlsx_path_for_norm, sheet_name='Normalization Results', engine='openpyxl')
+                    if 'Normalization Results' in xl.sheet_names or 'Normalization results' in xl.sheet_names:
+                        norm_sheet = 'Normalization Results' if 'Normalization Results' in xl.sheet_names else 'Normalization results'
+                        df_norm = pd.read_excel(xlsx_path_for_norm, sheet_name=norm_sheet, engine='openpyxl')
                         norm_results_data = {}
                         for _, row in df_norm.iterrows():
                             # 농도 추출 (농도 컬럼 찾기)
@@ -623,9 +670,10 @@ def general_analysis_mode(st):
                                     }
                                 except (ValueError, TypeError):
                                     continue
-                    # Normalization Results 시트가 없으면 MM Results 시트에서 가져오기
-                    elif 'MM Results' in xl.sheet_names:
-                        df_mm = pd.read_excel(xlsx_path_for_norm, sheet_name='MM Results', engine='openpyxl')
+                    # Normalization Results 시트가 없으면 Model simulation input / MM Results 시트에서 가져오기
+                    elif 'Model simulation input' in xl.sheet_names or 'Analysis mode input' in xl.sheet_names or 'MM Results' in xl.sheet_names:
+                        fallback_sheet = 'Model simulation input' if 'Model simulation input' in xl.sheet_names else ('Analysis mode input' if 'Analysis mode input' in xl.sheet_names else 'MM Results')
+                        df_mm = pd.read_excel(xlsx_path_for_norm, sheet_name=fallback_sheet, engine='openpyxl')
                         norm_results_data = {}
                         conc_col_name = 'Concentration [ug/mL]' if 'Concentration [ug/mL]' in df_mm.columns else 'Concentration'
                         for _, row in df_mm.iterrows():
@@ -781,7 +829,7 @@ def general_analysis_mode(st):
             st.dataframe(df_table, use_container_width=True, hide_index=True)
                  
         else:
-            st.info("⚠️ Michaelis-Menten 피팅 데이터가 없습니다. Data Load 모드에서 분석을 수행하거나 결과 파일(MM Fit Results 시트 포함)을 로드해주세요.")
+            st.info("⚠️ Michaelis-Menten 피팅 데이터가 없습니다. Data Load 모드에서 분석을 수행하거나 결과 파일(Michaelis-Menten Fit Results 시트 포함)을 로드해주세요.")
     
     with tab_alpha:
         st.subheader("📈 Alpha (α) Calculation")

@@ -2416,11 +2416,11 @@ def data_load_mode(st):
                         with zipfile.ZipFile(zip_buffer, 'w', zipfile.ZIP_DEFLATED) as zf:
                             for name, fig in fig_list:
                                 try:
-                                    img_bytes = fig.to_image(format="png", scale=2, transparent=True)
+                                    img_bytes = fig.to_image(format="png", scale=2)
                                     zf.writestr(f"{name}.png", img_bytes)
                                 except Exception as img_err:
-                                    # kaleido 미설치 등으로 to_image 실패 시 스킵
-                                    st.sidebar.warning(f"이미지 생성 실패 ({name}): {img_err}")
+                                    # kaleido 미설치 등으로 to_image 실패 시 스킵 (메인 영역 하단에 표시)
+                                    st.warning(f"이미지 생성 실패 ({name}): {img_err}")
                         zip_buffer.seek(0)
                         zip_bytes = zip_buffer.getvalue()
                         if zip_bytes:

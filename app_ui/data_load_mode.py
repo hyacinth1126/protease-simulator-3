@@ -2575,7 +2575,7 @@ def data_load_mode(st):
                         output.seek(0)
                         xlsx_data = output.getvalue()
                         
-                        # 다운로드/저장 파일명: 업로드 파일명에 맞춤 (있으면 results_<원본이름>.xlsx, 없으면 기본값)
+                        # 다운로드/저장 파일명: 업로드 파일명에 맞춤 (있으면 results_<원본이름>.xlsx, 없으면 샘플 파일명 기준)
                         uploaded_filename = results.get('uploaded_filename') or (uploaded_file.name if uploaded_file is not None else '')
                         uploaded_filename = os.path.basename(str(uploaded_filename).strip())
                         if uploaded_filename:
@@ -2584,7 +2584,12 @@ def data_load_mode(st):
                                 base = base[4:]  # raw_ 제거
                             xlsx_download_name = 'results_' + base + '.xlsx'
                         else:
-                            xlsx_download_name = 'Michaelis-Menten_calibration_results.xlsx'
+                            exp_type = results.get('mm_fit_results', {}).get('experiment_type', 'Substrate Concentration Variation (Standard Michaelis-Menten)')
+                            if exp_type == "Substrate Concentration Variation (Standard Michaelis-Menten)":
+                                base = "substrate_sample"  # raw_substrate_sample.xlsx 기준
+                            else:
+                                base = "enzyme_sample"     # raw_enzyme_sample.xlsx 기준
+                            xlsx_download_name = 'results_' + base + '.xlsx'
                         
                         # XLSX 파일 자동 저장 (Model simulation 모드에서 자동 로드용, 고정 파일명)
                         try:

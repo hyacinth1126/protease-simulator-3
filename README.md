@@ -27,6 +27,62 @@ streamlit run app.py
 
 ---
 
+## 다른 PC에서 셋업 (clone / pull 후 venv 만들기)
+
+`venv` 폴더는 `.gitignore`에 있어서 저장소에 포함되지 않습니다. 다른 컴퓨터에서 `git clone` 또는 `git pull` 한 뒤에는 **가상환경을 새로 만들고** 의존성을 설치해야 합니다.
+
+**1. 저장소 받기**
+
+```bash
+# 처음 받을 때
+git clone <저장소-URL>
+cd 6-protease-simulator-3
+
+# 이미 클론한 뒤 최신만 받을 때
+git pull
+```
+
+**2. 가상환경 생성**
+
+프로젝트 루트에서 실행합니다.
+
+```bash
+python -m venv venv
+```
+
+**3. 가상환경 활성화**
+
+- **Windows (PowerShell)**  
+  ```powershell
+  .\venv\Scripts\Activate.ps1
+  ```
+- **Windows (CMD)**  
+  ```cmd
+  venv\Scripts\activate.bat
+  ```
+- **macOS / Linux**  
+  ```bash
+  source venv/bin/activate
+  ```
+
+프롬프트 앞에 `(venv)` 가 붙으면 활성화된 것입니다.
+
+**4. 의존성 설치**
+
+```bash
+pip install -r requirements.txt
+```
+
+**5. 앱 실행**
+
+```bash
+streamlit run app.py
+```
+
+이후에는 이 PC에서도 **빠른 실행 (venv)** 절의 1–3단계(활성화 → 실행 → 종료)만 반복하면 됩니다.
+
+---
+
 단백질 분해 효소(Protease) 반응 시뮬레이션 및 데이터 분석 도구입니다.
 
 ---

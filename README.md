@@ -83,6 +83,16 @@ streamlit run app.py
 
 ---
 
+## Streamlit Community Cloud 배포 시 참고
+
+- **venv는 로컬 전용입니다.** Cloud는 저장소에 올라간 코드만 사용하며, `.gitignore`에 있는 `venv/`·`.venv/`는 배포되지 않습니다. Cloud 측에서 자체 가상환경에 `requirements.txt`로 의존성을 설치합니다.
+- **`connection refused` / `spawn error`** 가 나는 경우:
+  - `.streamlit/config.toml`에 `server.address = "0.0.0.0"` 이 설정되어 있어야 health check가 통과할 수 있습니다. (이미 설정됨)
+  - 배포 시 **Advanced settings**에서 **Python 버전**을 **3.12**로 선택해 보세요. Python 3.13 환경에서 일부 패키지 호환성 문제로 앱이 시작되지 않을 수 있습니다. 버전을 바꾸려면 앱을 삭제한 뒤 같은 설정으로 다시 배포해야 합니다.
+- 로컬에서는 `streamlit run app.py` 만 실행하면 됩니다.
+
+---
+
 단백질 분해 효소(Protease) 반응 시뮬레이션 및 데이터 분석 도구입니다.
 
 ---

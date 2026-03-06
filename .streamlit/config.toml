@@ -17,6 +17,8 @@ font = "sans serif"
 [server]
 headless = true
 port = 8501
+# Cloud 배포 시 health check 수신을 위해 모든 인터페이스에서 리스닝 (미설정 시 일부 환경에서 127.0.0.1만 바인딩됨)
+address = "0.0.0.0"
 enableXsrfProtection = true
 
 [browser]

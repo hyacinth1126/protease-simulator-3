@@ -86,9 +86,15 @@ streamlit run app.py
 ## Streamlit Community Cloud 배포 시 참고
 
 - **venv는 로컬 전용입니다.** Cloud는 저장소에 올라간 코드만 사용하며, `.gitignore`에 있는 `venv/`·`.venv/`는 배포되지 않습니다. Cloud 측에서 자체 가상환경에 `requirements.txt`로 의존성을 설치합니다.
-- **`connection refused` / `spawn error`** 가 나는 경우:
-  - `.streamlit/config.toml`에 `server.address = "0.0.0.0"` 이 설정되어 있어야 health check가 통과할 수 있습니다. (이미 설정됨)
-  - 배포 시 **Advanced settings**에서 **Python 버전**을 **3.12**로 선택해 보세요. Python 3.13 환경에서 일부 패키지 호환성 문제로 앱이 시작되지 않을 수 있습니다. 버전을 바꾸려면 앱을 삭제한 뒤 같은 설정으로 다시 배포해야 합니다.
+- **"Oh no. Error running app" / `spawn error`** 가 나고 로그에 에러가 안 보일 때:
+  1. **진입 파일을 최소 앱으로 바꿔 보기**  
+     Cloud 앱 설정에서 **Main file**을 `app_cloud_debug.py`로 변경한 뒤 재배포하세요.  
+     - **"Cloud OK" 화면이 뜨면** → 문제는 `app.py` 또는 의존성 로드 쪽입니다. Main file을 다시 `app.py`로 되돌리고, **Advanced settings**에서 **Python 버전**을 **3.12**로 선택한 뒤 앱을 삭제하고 같은 설정으로 재배포해 보세요.  
+     - **최소 앱도 안 뜨면** → Streamlit/Cloud 환경 문제 가능성이 큽니다. Python 3.12로 재배포하거나 [Community Cloud 상태](https://www.streamlitstatus.com/)를 확인하세요.
+  2. **서버 설정**  
+     `.streamlit/config.toml`에 `server.address = "0.0.0.0"` 이 있어야 health check가 통과합니다. (이미 설정됨)
+  3. **의존성**  
+     `requirements.txt`에 `protobuf>=3.20,<6` 제한이 있어야 합니다. (이미 추가됨)
 - 로컬에서는 `streamlit run app.py` 만 실행하면 됩니다.
 
 ---
@@ -102,6 +108,7 @@ streamlit run app.py
 | 폴더 / 파일 | 역할 |
 |-------------|------|
 | **`app.py`** | Streamlit 앱 진입점. 모드 선택 후 해당 UI로 분기합니다. |
+| **`app_cloud_debug.py`** | Cloud 디버깅용 최소 앱. spawn error 시 Main file을 이걸로 바꿔 환경 정상 여부를 확인할 수 있습니다. |
 | **`app_ui/`** | 웹 UI 코드. Data Load / Model Simulation 모드 화면과 로직을 담당합니다. |
 | **`mode_prep_raw_data/`** | 원본(raw) 데이터 읽기, 시간–곡선 피팅, MM/선형 보정, 초기 속도(v₀) 계산 등 **Data Load 모드의 핵심 연산**을 수행합니다. |
 | **`data_interpolation_mode/`** | Prism 스타일 보간(Exponential Association 등). 보간 곡선 생성 및 결과 저장을 담당합니다. |

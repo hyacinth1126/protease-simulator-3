@@ -1,4 +1,6 @@
 streamlit==1.55.0
+# Community Cloud 권장: protobuf 버전 제한 (미지정 시 충돌로 spawn error 유발 가능)
+protobuf>=3.20,<6
 pandas==2.3.3
 numpy==1.26.4
 matplotlib==3.8.1

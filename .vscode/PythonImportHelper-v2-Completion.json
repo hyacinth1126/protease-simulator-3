@@ -252,6 +252,38 @@
         "documentation": {}
     },
     {
+        "label": "datetime",
+        "importPath": "datetime",
+        "description": "datetime",
+        "isExtraImport": true,
+        "detail": "datetime",
+        "documentation": {}
+    },
+    {
+        "label": "datetime",
+        "importPath": "datetime",
+        "description": "datetime",
+        "isExtraImport": true,
+        "detail": "datetime",
+        "documentation": {}
+    },
+    {
+        "label": "datetime",
+        "importPath": "datetime",
+        "description": "datetime",
+        "isExtraImport": true,
+        "detail": "datetime",
+        "documentation": {}
+    },
+    {
+        "label": "datetime",
+        "importPath": "datetime",
+        "description": "datetime",
+        "isExtraImport": true,
+        "detail": "datetime",
+        "documentation": {}
+    },
+    {
         "label": "Image",
         "importPath": "PIL",
         "description": "PIL",
@@ -479,11 +511,12 @@
         "documentation": {}
     },
     {
-        "label": "render_footer",
-        "importPath": "app_ui.footer",
-        "description": "app_ui.footer",
+        "label": "traceback",
+        "kind": 6,
         "isExtraImport": true,
-        "detail": "app_ui.footer",
+        "importPath": "traceback",
+        "description": "traceback",
+        "detail": "traceback",
         "documentation": {}
     },
     {
@@ -644,7 +677,7 @@
         "kind": 2,
         "importPath": "app_ui.data_load_mode",
         "description": "app_ui.data_load_mode",
-        "peekOfCode": "def data_load_mode(st):\n    \"\"\"Data Load 모드 - CSV 파일 업로드 또는 이미지에서 데이터 추출\"\"\"\n    # 폴더 구조 생성\n    os.makedirs(\"prep_raw_data_mode\", exist_ok=True)\n    os.makedirs(\"prep_raw_data_mode/results\", exist_ok=True)\n    os.makedirs(\"data_interpolation_mode/results\", exist_ok=True)\n    st.header(\"📥 Data Load Mode\")\n    st.markdown(\"---\")\n    # Sidebar configuration\n    # Experiment condition selection (before file upload)",
+        "peekOfCode": "def data_load_mode(st):\n    \"\"\"Data Load 모드 - CSV 파일 업로드 또는 이미지에서 데이터 추출\"\"\"\n    _debug_log(\"data_load_mode(): entered\")\n    # 폴더 구조 생성\n    os.makedirs(\"prep_raw_data_mode\", exist_ok=True)\n    os.makedirs(\"prep_raw_data_mode/results\", exist_ok=True)\n    os.makedirs(\"data_interpolation_mode/results\", exist_ok=True)\n    st.header(\"📥 Data Load Mode\")\n    st.markdown(\"---\")\n    # Sidebar configuration",
         "detail": "app_ui.data_load_mode",
         "documentation": {}
     },
@@ -653,7 +686,7 @@
         "kind": 5,
         "importPath": "app_ui.data_load_mode",
         "description": "app_ui.data_load_mode",
-        "peekOfCode": "_PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), \"..\"))\nif _PROJECT_ROOT not in sys.path:\n    sys.path.insert(0, _PROJECT_ROOT)\nimport numpy as np\nimport pandas as pd\nimport streamlit as st\nimport plotly.graph_objects as go\nfrom PIL import Image\ntry:\n    import cv2",
+        "peekOfCode": "_PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), \"..\"))\nif _PROJECT_ROOT not in sys.path:\n    sys.path.insert(0, _PROJECT_ROOT)\n_debug_log(\"module load: sys.path set\")\nimport numpy as np\nimport pandas as pd\nimport streamlit as st\nimport plotly.graph_objects as go\nfrom PIL import Image\n_debug_log(\"module load: numpy, pandas, streamlit, plotly, PIL done\")",
         "detail": "app_ui.data_load_mode",
         "documentation": {}
     },
@@ -680,7 +713,7 @@
         "kind": 2,
         "importPath": "app_ui.general_analysis_mode",
         "description": "app_ui.general_analysis_mode",
-        "peekOfCode": "def general_analysis_mode(st):\n    \"\"\"Model Simulation Mode - Standard FRET Analysis\"\"\"\n    # Sidebar configuration\n    enzyme_mw = st.sidebar.number_input(\n        \"Enzyme Molecular Weight (kDa)\",\n        min_value=1.0,\n        max_value=500.0,\n        value=56.6,\n        step=0.1,\n        help=\"Enter enzyme molecular weight required for concentration conversion.\"",
+        "peekOfCode": "def general_analysis_mode(st):\n    \"\"\"Model Simulation Mode - Standard FRET Analysis\"\"\"\n    _debug_log(\"general_analysis_mode(): entered\")\n    # Sidebar configuration\n    enzyme_mw = st.sidebar.number_input(\n        \"Enzyme Molecular Weight (kDa)\",\n        min_value=1.0,\n        max_value=500.0,\n        value=56.6,\n        step=0.1,",
         "detail": "app_ui.general_analysis_mode",
         "documentation": {}
     },
@@ -1013,7 +1046,7 @@
         "kind": 2,
         "importPath": "app",
         "description": "app",
-        "peekOfCode": "def main():\n    \"\"\"Main Streamlit app\"\"\"\n    st.set_page_config(\n        page_title=\"Hydrogel FRET Advanced Analysis\",\n        page_icon=\"🔬\",\n        layout=\"wide\"\n    )\n    st.title(\"🔬  FRET Protease Simulation\")\n    st.markdown(\"---\")\n    # Mode selection",
+        "peekOfCode": "def main():\n    \"\"\"Main Streamlit app\"\"\"\n    _cloud_log(\"main(): entered\")\n    st.set_page_config(\n        page_title=\"Hydrogel FRET Advanced Analysis\",\n        page_icon=\"🔬\",\n        layout=\"wide\"\n    )\n    _cloud_log(\"main(): set_page_config done\")\n    st.title(\"🔬  FRET Protease Simulation\")",
         "detail": "app",
         "documentation": {}
     }

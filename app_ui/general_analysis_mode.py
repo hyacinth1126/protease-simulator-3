@@ -1,3 +1,5 @@
+import sys
+from datetime import datetime
 import pandas as pd
 import streamlit as st
 import plotly.graph_objects as go
@@ -5,6 +7,18 @@ import numpy as np
 import os
 from pathlib import Path
 
+def _debug_log(msg: str) -> None:
+    """Cloud 로그용: stderr에 출력 후 flush"""
+    try:
+        ts = datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S")
+        sys.stderr.write(f"[{ts}] [general_analysis_mode] {msg}\n")
+        sys.stderr.flush()
+    except Exception:
+        pass
+
+_debug_log("module load: starting")
+
+_debug_log("module load: importing mode_general_analysis.analysis")
 from mode_general_analysis.analysis import (
     UnitStandardizer,
     DataNormalizer,
@@ -16,8 +30,11 @@ from mode_general_analysis.analysis import (
     ModelE_ProductInhibition,
     ModelF_EnzymeSurfaceSequestration
 )
+_debug_log("module load: importing mode_general_analysis.plot")
 from mode_general_analysis.plot import Visualizer
+_debug_log("module load: importing mode_prep_raw_data.prep (michaelis_menten_calibration)")
 from mode_prep_raw_data.prep import michaelis_menten_calibration
+_debug_log("module load: general_analysis_mode imports complete")
 
 
 def _wide_mm_curves_to_long(df):
@@ -63,7 +80,8 @@ def verbose_callback(message: str, level: str = "info"):
 
 def general_analysis_mode(st):
     """Model Simulation Mode - Standard FRET Analysis"""
-    
+    _debug_log("general_analysis_mode(): entered")
+
     # Sidebar configuration
     enzyme_mw = st.sidebar.number_input(
         "Enzyme Molecular Weight (kDa)",

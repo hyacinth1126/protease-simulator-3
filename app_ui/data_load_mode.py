@@ -3,37 +3,58 @@ import re
 import sys
 import tempfile
 import time
+from datetime import datetime
+
+def _debug_log(msg: str) -> None:
+    """Cloud 로그용: stderr에 출력 후 flush"""
+    try:
+        ts = datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S")
+        sys.stderr.write(f"[{ts}] [data_load_mode] {msg}\n")
+        sys.stderr.flush()
+    except Exception:
+        pass
+
+_debug_log("module load: starting")
 
 # 프로젝트 루트를 path에 추가 (mode_prep_raw_data, data_interpolation_mode 등 import 위해)
 _PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 if _PROJECT_ROOT not in sys.path:
     sys.path.insert(0, _PROJECT_ROOT)
+_debug_log("module load: sys.path set")
 
 import numpy as np
 import pandas as pd
 import streamlit as st
 import plotly.graph_objects as go
 from PIL import Image
+_debug_log("module load: numpy, pandas, streamlit, plotly, PIL done")
 
 try:
     import cv2
     CV2_AVAILABLE = True
+    _debug_log("module load: cv2 OK")
 except ImportError:
     CV2_AVAILABLE = False
+    _debug_log("module load: cv2 not available")
 
 try:
     import pytesseract
     from pytesseract import Output
     TESSERACT_AVAILABLE = True
+    _debug_log("module load: pytesseract OK")
 except ImportError:
     TESSERACT_AVAILABLE = False
+    _debug_log("module load: pytesseract not available")
 
 try:
     import easyocr
     EASYOCR_AVAILABLE = True
+    _debug_log("module load: easyocr OK")
 except ImportError:
     EASYOCR_AVAILABLE = False
+    _debug_log("module load: easyocr not available")
 
+_debug_log("module load: importing mode_prep_raw_data.prep")
 from mode_prep_raw_data.prep import (
     read_raw_data,
     fit_time_course,
@@ -41,17 +62,28 @@ from mode_prep_raw_data.prep import (
     michaelis_menten_calibration,
     calculate_initial_velocity
 )
+_debug_log("module load: mode_prep_raw_data.prep done")
+
+_debug_log("module load: importing data_interpolation_mode.interpolate_prism")
 from data_interpolation_mode.interpolate_prism import (
     exponential_association,
     create_prism_interpolation_range
 )
+_debug_log("module load: data_interpolation_mode.interpolate_prism done")
+
+_debug_log("module load: importing scipy.optimize.curve_fit")
 from scipy.optimize import curve_fit
+_debug_log("module load: scipy done")
 
 # kaleido를 앱 시작 시 로드 (이미지 ZIP 내보내기용; Windows 등에서 인식 문제 방지)
 try:
     import kaleido  # noqa: F401
+    _debug_log("module load: kaleido OK")
 except ImportError:
     kaleido = None
+    _debug_log("module load: kaleido not available")
+
+_debug_log("module load: data_load_mode imports complete")
 
 
 def detect_lines_and_points(image_array):
@@ -908,7 +940,8 @@ def manual_data_entry(data_type="점"):
 
 def data_load_mode(st):
     """Data Load 모드 - CSV 파일 업로드 또는 이미지에서 데이터 추출"""
-    
+    _debug_log("data_load_mode(): entered")
+
     # 폴더 구조 생성
     os.makedirs("prep_raw_data_mode", exist_ok=True)
     os.makedirs("prep_raw_data_mode/results", exist_ok=True)

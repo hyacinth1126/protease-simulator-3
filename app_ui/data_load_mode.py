@@ -1631,18 +1631,9 @@ def data_load_mode(st):
                 'normalization_results': normalization_results,  # 정규화 결과 추가
                 'uploaded_filename': os.path.basename(uploaded_file.name) if uploaded_file is not None else None  # 다운로드 파일명용 (경로 제외)
             }
-            # Export Plots 캐시 무효화: 결과가 바뀌면 ZIP용 PNG를 다시 렌더링
+            # Export Plots 캐시 무효화: 결과가 바뀌면 ZIP용 PNG를 Export 탭에서 다시 렌더링
             st.session_state['export_cache_version'] = time.time()
-
-            # Export Plots 탭을 열지 않아도 ZIP 다운로드 준비: 플롯을 미리 PNG로 렌더링해 캐시에 저장
-            with st.spinner("Preparing export plots for ZIP..."):
-                _results = st.session_state['interpolation_results']
-                _export_results = _render_export_plots_to_png(_results)
-                if _export_results:
-                    st.session_state['export_plots_cache'] = {
-                        'version': st.session_state['export_cache_version'],
-                        'export_results': _export_results,
-                    }
+            # ZIP/PNG 렌더링은 Export Plots 탭에 들어갈 때만 수행 (초기 화면 로딩 지연 방지)
 
             # 결과 적용 플래그 설정
             st.session_state['mm_data_ready'] = True
@@ -2941,7 +2932,7 @@ def data_load_mode(st):
                     _zip_button_placeholder = st.empty()
 
                 st.info(
-                    "생성된 플롯을 미리보기할 수 있으며, 개별 PNG 저장 또는 모든 플롯을 ZIP 파일로 한 번에 저장할 수 있습니다."
+                    "You can preview the generated plots, save individual PNGs, or save all plots at once as a ZIP file."
                 )
 
                 try:
@@ -2966,7 +2957,7 @@ def data_load_mode(st):
                     if use_cache:
                         export_results = cached_list
                         with _zip_button_placeholder.container():
-                            st.caption("✅ 캐시된 결과 사용 (재렌더링 없음)")
+                            st.caption("✅ Using cached results (no re-render)")
                         progress_placeholder = st.empty()
                         if total_plots > 0:
                             progress_placeholder.progress(1, text=f"{total_plots} / {total_plots} plots rendered")
@@ -2974,8 +2965,8 @@ def data_load_mode(st):
                     else:
                         # 상단 오른쪽: 렌더링 중일 때 상태 표시
                         with _zip_button_placeholder.container():
-                            st.caption("⏳ 플롯 렌더링 중...")
-                            st.caption("(완료 시 ZIP 다운로드 활성화)")
+                            st.caption("⏳ Rendering plots...")
+                            st.caption("(ZIP download will be enabled when complete)")
 
                         progress_placeholder = st.empty()
                         if total_plots > 0:
@@ -2988,7 +2979,7 @@ def data_load_mode(st):
 
                         export_results = []
 
-                    st.markdown("### 개별 플롯 미리보기 및 저장")
+                    st.markdown("### Preview and save individual plots")
                     for idx, (name, fig) in enumerate(fig_list):
                         st.markdown(f"**{idx + 1}. {name}**")
                         st.plotly_chart(fig, use_container_width=True)
@@ -3043,17 +3034,17 @@ def data_load_mode(st):
 
                     if not all_success:
                         if total_plots == 0:
-                            st.info("내보낼 플롯이 없습니다.")
+                            st.info("No plots to export.")
                         elif successful_exports:
                             st.info(
-                                f"총 {total_plots}개 중 {len(successful_exports)}개 플롯만 PNG 변환에 성공했습니다. "
-                                "모든 플롯이 성공적으로 렌더링된 경우에만 '모든 플랏 다운로드' 버튼이 활성화됩니다."
+                                f"Only {len(successful_exports)} of {total_plots} plots were converted to PNG successfully. "
+                                "The 'Download ALL Plots' button is enabled only when all plots render successfully."
                             )
                         else:
                             st.info(
-                                "모든 플롯 PNG 변환에 실패했습니다. "
-                                "`pip install -U 'kaleido>=1.0.0'` 후 앱을 재시작하세요. "
-                                "Kaleido 1.x는 Chrome/Chromium이 필요합니다. Chrome이 없으면 터미널에서 `plotly_get_chrome`을 실행하세요."
+                                "All plot PNG conversions failed. "
+                                "Restart the app after `pip install -U 'kaleido>=1.0.0'`. "
+                                "Kaleido 1.x requires Chrome/Chromium. If Chrome is not installed, run `plotly_get_chrome` in the terminal."
                             )
 
                     # 모든 플롯이 성공적으로 렌더링된 경우에만 ZIP 데이터 생성
@@ -3081,10 +3072,10 @@ def data_load_mode(st):
                             )
                         else:
                             if total_plots == 0:
-                                st.caption("내보낼 플롯 없음")
+                                st.caption("No plots to export")
                             else:
-                                st.caption("⏳ 렌더링 완료 후 활성화")
-                                st.caption(f"({len(successful_exports)}/{total_plots} 성공)")
+                                st.caption("⏳ Enabled when rendering completes")
+                                st.caption(f"({len(successful_exports)}/{total_plots} successful)")
 
                 except Exception as export_err:
                     st.warning(f"Error in Export Plots tab: {export_err}")

@@ -3095,8 +3095,8 @@ def data_load_mode(st):
                         else:
                             st.warning(
                                 f"PNG export failed for {name}. "
-                                "Kaleido 1.x needs Chrome/Chromium: on **Streamlit Cloud** add a repo-root `packages.txt` with the line `chromium` and redeploy; "
-                                "locally run `plotly_get_chrome` or install Chrome."
+                                "Kaleido 1.x needs Chrome/Chromium (e.g. run `plotly_get_chrome` or install Chrome locally). "
+                                "On Streamlit Cloud, PNG export may be unavailable; use a screenshot or run the app locally to download PNGs."
                             )
 
                         # 진행률 업데이트 (렌더링 중일 때만)
@@ -3132,8 +3132,8 @@ def data_load_mode(st):
                         else:
                             st.info(
                                 "All plot PNG conversions failed. "
-                                "Kaleido 1.x requires Chrome/Chromium: on **Streamlit Cloud** add a repo-root `packages.txt` with the line `chromium` and redeploy; "
-                                "locally run `plotly_get_chrome` or install Chrome."
+                                "Kaleido 1.x requires Chrome/Chromium (e.g. run `plotly_get_chrome` or install Chrome locally). "
+                                "On Streamlit Cloud, use a screenshot or run the app locally to get PNGs."
                             )
 
                     # 모든 플롯이 성공적으로 렌더링된 경우에만 ZIP 데이터 생성

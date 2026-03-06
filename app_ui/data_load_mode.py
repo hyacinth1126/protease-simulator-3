@@ -393,8 +393,8 @@ def _build_exponential_increase_interp_fig(results):
 
     fig_mm = go.Figure()
     x_min_global = -0.1
-    # x_max: 농도별 exponential 구간 끝(t_cut) 중 최솟값에 맞춤 (최소 x를 갖는 농도조건)
-    per_conc_max_times = []
+    # x_max: 농도별 t_cut(3τ) 중 최솟값에 맞춤 = 최소 x(가장 짧은 exponential 구간)를 갖는 농도
+    t_cuts = []
     all_plot_x, all_plot_y = [], []  # 범례 위치 결정용: 데이터 점 수집
     for idx, conc_name in enumerate(conc_order):
         color = colors[idx % len(colors)]
@@ -403,6 +403,8 @@ def _build_exponential_increase_interp_fig(results):
         n_data = norm_results.get(conc_name)
         tau = n_data.get('tau') if n_data else None
         t_cut = (3.0 * tau) if (tau is not None and not np.isinf(tau) and tau > 0) else None
+        if t_cut is not None:
+            t_cuts.append(t_cut)
 
         if 'raw_data' in results and conc_name in results['raw_data']:
             raw_conc_data = results['raw_data'][conc_name]
@@ -461,12 +463,10 @@ def _build_exponential_increase_interp_fig(results):
                 ))
                 all_plot_x.extend(curve_df['Time_min'].tolist())
                 all_plot_y.extend(curve_df['RFU_Interpolated'].tolist())
-                t_max_conc = curve_df['Time_min'].max()
-                per_conc_max_times.append(t_max_conc)
-    if not per_conc_max_times:
+    if not t_cuts:
         return None
-    # 최소 x(가장 짧은 exponential 구간)를 갖는 농도에 맞춰 x_max 설정
-    x_max_global = min(per_conc_max_times)
+    # 최소 x(가장 짧은 3τ)를 갖는 농도에 맞춰 x_max = min(t_cut)
+    x_max_global = min(t_cuts)
     x_margin_right = max((x_max_global - x_min_global) * 0.03, 0.05)
     x_range = [x_min_global, x_max_global + x_margin_right]
     fig_mm.update_xaxes(range=x_range)
@@ -506,7 +506,7 @@ def _build_exponential_increase_interp_fig(results):
     else:
         legend_pos = dict(orientation="v", yanchor="top", y=0.99, xanchor="left", x=0.02)
     fig_mm.update_layout(
-        title='Time–Fluorescence: Exponential increase only (by concentration)',
+        title='Normalized Time-Fluorescence exponential curves',
         xaxis_title='Time (min)',
         yaxis_title='RFU',
         height=600,
@@ -675,7 +675,7 @@ def _build_all_export_figures(results):
         out.append(("Time_Fluorescence_Interpolated_Curves", fig_interp))
     fig_exp_only = _build_exponential_increase_interp_fig(results)
     if fig_exp_only is not None:
-        out.append(("Exponential_Increase_All_Concentrations", fig_exp_only))
+        out.append(("Normalized_Time_Fluorescence_exponential_curves", fig_exp_only))
     if 'normalization_results' in results and results['normalization_results']:
         norm_results = results['normalization_results']
         conc_order = sorted(norm_results.keys(), key=lambda x: norm_results[x]['concentration'])
@@ -715,7 +715,7 @@ def _export_fig_to_png_bytes(fig, plot_name=None, width=800, height=600):
             xref="paper",
             yref="paper",
         )
-    # Exponential_Increase_All_Concentrations는 figure에서 이미 좌상단 범례 설정됨 (데이터와 겹치지 않도록)
+    # Normalized_Time_Fluorescence_exponential_curves는 figure에서 범례 위치 자동 설정됨 (데이터와 겹치지 않도록)
     fig.update_layout(
         width=width,
         height=height,
@@ -2523,7 +2523,7 @@ def data_load_mode(st):
                         # 농도별 exponential increase 구간만 (Time-Flu 인터폴레이션 플롯 디자인)
                         fig_exponential_only = _build_exponential_increase_interp_fig(results)
                         if fig_exponential_only is not None:
-                            st.subheader("Time–Fluorescence: Exponential increase only (by concentration)")
+                            st.subheader("Normalized Time-Fluorescence exponential curves")
                             st.caption("Interpolated curves up to plateau, exponential section (0 ≤ t ≤ 3τ) only. Same design as Time-Fluorescence Interpolated Curves.")
                             st.plotly_chart(fig_exponential_only, use_container_width=True)
                         

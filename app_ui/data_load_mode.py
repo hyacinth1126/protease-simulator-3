@@ -392,8 +392,10 @@ def _build_exponential_increase_interp_fig(results):
     colors = ['blue', 'red', 'orange', 'green', 'purple', 'brown', 'pink', 'gray', 'olive', 'cyan']
 
     fig_mm = go.Figure()
-    x_min_global = 0.0
-    x_max_global = 0.0
+    x_min_global = -0.1
+    # x_max: 농도별 exponential 구간 끝(t_cut) 중 최솟값에 맞춤 (최소 x를 갖는 농도조건)
+    per_conc_max_times = []
+    all_plot_x, all_plot_y = [], []  # 범례 위치 결정용: 데이터 점 수집
     for idx, conc_name in enumerate(conc_order):
         color = colors[idx % len(colors)]
         conc_match = re.search(r'(\d+\.?\d*)', conc_name)
@@ -410,6 +412,8 @@ def _build_exponential_increase_interp_fig(results):
             t_raw = t_raw[mask_raw]
             v_raw = v_raw[mask_raw]
             if len(t_raw) > 0:
+                all_plot_x.extend(t_raw.tolist())
+                all_plot_y.extend(v_raw.tolist())
                 fig_mm.add_trace(go.Scatter(
                     x=t_raw,
                     y=v_raw,
@@ -455,11 +459,52 @@ def _build_exponential_increase_interp_fig(results):
                     legendgroup=conc_name,
                     showlegend=False
                 ))
-                x_max_global = max(x_max_global, curve_df['Time_min'].max())
-    if x_max_global <= 0:
+                all_plot_x.extend(curve_df['Time_min'].tolist())
+                all_plot_y.extend(curve_df['RFU_Interpolated'].tolist())
+                t_max_conc = curve_df['Time_min'].max()
+                per_conc_max_times.append(t_max_conc)
+    if not per_conc_max_times:
         return None
-    x_span = x_max_global - x_min_global
-    x_margin = max(x_span * 0.03, 0.2) if x_span > 0 else 0.2
+    # 최소 x(가장 짧은 exponential 구간)를 갖는 농도에 맞춰 x_max 설정
+    x_max_global = min(per_conc_max_times)
+    x_margin_right = max((x_max_global - x_min_global) * 0.03, 0.05)
+    x_range = [x_min_global, x_max_global + x_margin_right]
+    fig_mm.update_xaxes(range=x_range)
+    if exp_type == "Enzyme Concentration Variation (Fixed substrate)" and results.get('raw_data'):
+        all_y_mm = [v for d in results['raw_data'].values() for v in d['value']]
+        y_max_mm = max(all_y_mm) if all_y_mm else 1
+        y_pad_bottom_mm = max(0.02 * y_max_mm, 50)
+        y_range = [-y_pad_bottom_mm, y_max_mm * 1.02]
+        fig_mm.update_yaxes(range=y_range)
+    else:
+        fig_mm.update_yaxes(rangemode='tozero')
+        y_min_plot = min(all_plot_y) if all_plot_y else 0
+        y_max_plot = max(all_plot_y) if all_plot_y else 1
+        y_range = [min(0, y_min_plot), y_max_plot * 1.02 if y_max_plot > 0 else 1]
+
+    # 범례: 좌상단 vs 우하단 중 데이터가 덜 겹치는 쪽에 배치
+    if all_plot_x and all_plot_y and len(y_range) == 2 and y_range[1] > y_range[0]:
+        xs = np.asarray(all_plot_x)
+        ys = np.asarray(all_plot_y)
+        x_span = x_range[1] - x_range[0]
+        y_span = y_range[1] - y_range[0]
+        if x_span <= 0:
+            x_span = 1
+        if y_span <= 0:
+            y_span = 1
+        x_norm = (xs - x_range[0]) / x_span
+        y_norm = (ys - y_range[0]) / y_span
+        # 좌상단: x < 0.35, y > 0.65  /  우하단: x > 0.65, y < 0.35
+        tl = np.sum((x_norm < 0.35) & (y_norm > 0.65))
+        br = np.sum((x_norm > 0.65) & (y_norm < 0.35))
+        use_bottom_right = br <= tl
+    else:
+        use_bottom_right = True
+
+    if use_bottom_right:
+        legend_pos = dict(orientation="v", yanchor="bottom", y=0.02, xanchor="right", x=0.99)
+    else:
+        legend_pos = dict(orientation="v", yanchor="top", y=0.99, xanchor="left", x=0.02)
     fig_mm.update_layout(
         title='Time–Fluorescence: Exponential increase only (by concentration)',
         xaxis_title='Time (min)',
@@ -472,31 +517,17 @@ def _build_exponential_increase_interp_fig(results):
         xaxis=dict(showline=True, mirror=True, ticks='outside'),
         yaxis=dict(showline=True, mirror=True, ticks='outside'),
         legend=dict(
-            orientation="v",
-            yanchor="top",
-            y=0.99,
-            xanchor="right",
-            x=0.99,
+            **legend_pos,
             xref="paper",
             yref="paper",
-            bgcolor="rgba(255,255,255,0.95)",
-            bordercolor="rgba(0,0,0,0)",
-            borderwidth=0,
+            bgcolor="rgba(255,255,255,0.92)",
+            bordercolor="rgba(0,0,0,0.2)",
+            borderwidth=1,
             font=dict(size=12, color="#333333"),
             traceorder="normal"
         ),
         colorway=colors
     )
-    # x-axis capped at 1.1 min for export/display
-    x_max_view = min(x_max_global + x_margin, 1.1)
-    fig_mm.update_xaxes(range=[x_min_global - x_margin, x_max_view])
-    if exp_type == "Enzyme Concentration Variation (Fixed substrate)" and results.get('raw_data'):
-        all_y_mm = [v for d in results['raw_data'].values() for v in d['value']]
-        y_max_mm = max(all_y_mm) if all_y_mm else 1
-        y_pad_bottom_mm = max(0.02 * y_max_mm, 50)
-        fig_mm.update_yaxes(range=[-y_pad_bottom_mm, y_max_mm * 1.02])
-    else:
-        fig_mm.update_yaxes(rangemode='tozero')
     return fig_mm
 
 
@@ -598,7 +629,10 @@ def _build_v0_fig(results):
         conc_min, conc_max = min(v0_data['concentrations']), max(v0_data['concentrations'])
         conc_range = np.linspace(conc_min * 0.5, conc_max * 1.5, 200)
         v0_fitted = michaelis_menten_calibration(conc_range, mm_fit['Vmax'], mm_fit['Km'])
-        fig.add_trace(go.Scatter(x=conc_range, y=v0_fitted, mode='lines', name=mm_fit.get('equation', ''), line=dict(width=2.5, color='blue')))
+        eq_name = mm_fit.get('equation', '')
+        if mm_fit.get('R_squared') is not None:
+            eq_name += f" (R² = {mm_fit['R_squared']:.4f})"
+        fig.add_trace(go.Scatter(x=conc_range, y=v0_fitted, mode='lines', name=eq_name, line=dict(width=2.5, color='blue')))
         fig.update_layout(
             title='Initial Velocity (v₀) vs Substrate Concentration [S]',
             xaxis_title='[S] (μM)', yaxis_title='Initial Velocity v₀ (Fluorescence Units / Time)',
@@ -615,7 +649,10 @@ def _build_v0_fig(results):
             slope = mm_fit['slope']
             intercept = mm_fit.get('intercept', 0)
             v0_fitted = slope * conc_range + intercept
-            fig.add_trace(go.Scatter(x=conc_range, y=v0_fitted, mode='lines', name=f'Linear Fit: {mm_fit.get("equation", "")}', line=dict(width=2.5, color='blue', dash='dash')))
+            line_name = f'Linear Fit: {mm_fit.get("equation", "")}'
+            if mm_fit.get('R_squared') is not None:
+                line_name += f" (R² = {mm_fit['R_squared']:.4f})"
+            fig.add_trace(go.Scatter(x=conc_range, y=v0_fitted, mode='lines', name=line_name, line=dict(width=2.5, color='blue', dash='dash')))
         fig.update_layout(
             title='Initial Velocity (v₀) vs Enzyme Concentration [E] (Constant Substrate)',
             xaxis_title='[E] (μg/mL)', yaxis_title='Initial Velocity v₀ (Fluorescence Units / Time)',
@@ -668,7 +705,7 @@ def _export_fig_to_png_bytes(fig, plot_name=None, width=800, height=600):
     """지정 비율로 PNG 바이트 반환. 실패 시 None. Export 탭 및 Run 직후 ZIP 사전 렌더링에 공통 사용."""
     fig = go.Figure(fig)
     legend_kw = dict(bgcolor="rgba(0,0,0,0)", bordercolor="rgba(0,0,0,0)", borderwidth=0)
-    if plot_name in ("Time_Fluorescence_Interpolated_Curves", "Exponential_Increase_All_Concentrations"):
+    if plot_name == "Time_Fluorescence_Interpolated_Curves":
         legend_kw.update(
             orientation="v",
             yanchor="bottom",
@@ -678,6 +715,7 @@ def _export_fig_to_png_bytes(fig, plot_name=None, width=800, height=600):
             xref="paper",
             yref="paper",
         )
+    # Exponential_Increase_All_Concentrations는 figure에서 이미 좌상단 범례 설정됨 (데이터와 겹치지 않도록)
     fig.update_layout(
         width=width,
         height=height,
@@ -2650,11 +2688,14 @@ def data_load_mode(st):
                             intercept = mm_fit.get('intercept', 0)
                             v0_fitted = slope * conc_range + intercept
                             
+                            line_name = f'Linear Fit: {mm_fit["equation"]}'
+                            if mm_fit.get('R_squared') is not None:
+                                line_name += f" (R² = {mm_fit['R_squared']:.4f})"
                             fig_v0.add_trace(go.Scatter(
                                 x=conc_range,
                                 y=v0_fitted,
                                 mode='lines',
-                                name=f'Linear Fit: {mm_fit["equation"]}',
+                                name=line_name,
                                 line=dict(width=2.5, color='blue', dash='dash')
                             ))
                             
@@ -3064,10 +3105,20 @@ def data_load_mode(st):
                     _zip_button_placeholder.empty()
                     with _zip_button_placeholder.container():
                         if download_all_enabled:
+                            # ZIP filename based on uploaded file name:
+                            # raw_*.ext -> plots_*.zip, otherwise plots_<name>.zip
+                            uploaded_filename = os.path.basename(str(results.get("uploaded_filename") or "").strip())
+                            zip_download_name = "all_analysis_plots.zip"
+                            if uploaded_filename:
+                                base = uploaded_filename.rsplit(".", 1)[0]
+                                if base.startswith("raw_"):
+                                    base = base[4:]
+                                if base:
+                                    zip_download_name = f"plots_{base}.zip"
                             st.download_button(
                                 label="📥 Download ALL Plots (ZIP)",
                                 data=zip_bytes,
-                                file_name="all_analysis_plots.zip",
+                                file_name=zip_download_name,
                                 mime="application/zip",
                                 use_container_width=True,
                                 key="export_all_plots_zip_download"

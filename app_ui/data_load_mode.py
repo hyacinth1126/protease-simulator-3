@@ -883,16 +883,13 @@ def _render_client_side_png_download(fig, name: str, *, width=None, height=None,
         div_id=div_id,
     )
     html = f"""
-<div style="display:flex; align-items:center; gap:8px; margin: 6px 0 10px 0;">
+<div style="margin: 6px 0 10px 0;">
   <button id="{div_id}_dl" style="
     padding: 6px 10px; border-radius: 8px; border: 1px solid rgba(49,51,63,0.2);
     background: white; cursor: pointer; font-size: 14px;
   ">
-    ⬇️ Download PNG (browser)
+    ⬇️ Download PNG
   </button>
-  <span style="font-size:12px; color: rgba(49,51,63,0.7);">
-    (This does not use Kaleido/Chrome on the server.)
-  </span>
 </div>
 {plot_html}
 <script>
@@ -949,11 +946,11 @@ def _render_client_side_download_all(fig_list, *, width=None, height=None, scale
     padding: 8px 12px; border-radius: 10px; border: 1px solid rgba(49,51,63,0.25);
     background: white; cursor: pointer; font-size: 14px; width: 100%;
   ">
-    📥 전체 PNG 저장 (폴더 선택 → 순서대로 저장)
+    📥 Save All PNG
   </button>
 </div>
 <div id="{div_id}_status" style="text-align:right; font-size:12px; color: rgba(49,51,63,0.65); margin-top:6px;">
-  버튼 한 번 누르면 폴더를 선택한 뒤, 맨 위 플롯부터 마지막 플롯까지 순서대로 PNG가 저장됩니다. (Chrome/Edge 권장)
+  Click to save all plots as PNGs in order. (Chrome/Edge recommended)
 </div>
 <div id="{div_id}_scratch" style="width:0;height:0;overflow:hidden;"></div>
 <script src="https://cdn.plot.ly/plotly-2.30.0.min.js"></script>
@@ -974,7 +971,7 @@ def _render_client_side_download_all(fig_list, *, width=None, height=None, scale
 
     btn.addEventListener("click", async () => {{
       if (typeof Plotly === "undefined") {{
-        status.textContent = "Plotly 로딩 실패. 잠시 후 다시 시도하세요.";
+        status.textContent = "Plotly failed to load. Please try again in a moment.";
         return;
       }}
       btn.disabled = true;
@@ -985,13 +982,13 @@ def _render_client_side_download_all(fig_list, *, width=None, height=None, scale
           try {{
             dirHandle = await window.showDirectoryPicker();
           }} catch (pickErr) {{
-            if (pickErr.name !== "AbortError") status.textContent = "폴더 선택 실패: " + (pickErr.message || String(pickErr));
+            if (pickErr.name !== "AbortError") status.textContent = "Folder selection failed: " + (pickErr.message || String(pickErr));
           }}
         }}
         if (dirHandle) {{
           for (let i = 0; i < figs.length; i++) {{
             const item = figs[i];
-            status.textContent = "저장 중... (" + (i+1) + "/" + figs.length + ") " + item.name + ".png";
+            status.textContent = "Saving... (" + (i+1) + "/" + figs.length + ") " + item.name + ".png";
             const div = document.createElement("div");
             scratch.appendChild(div);
             await Plotly.newPlot(div, item.data, item.layout, {{displayModeBar: false, responsive: false}});
@@ -1005,11 +1002,11 @@ def _render_client_side_download_all(fig_list, *, width=None, height=None, scale
             await writable.close();
             await sleep(100);
           }}
-          status.textContent = "완료. 선택한 폴더에 " + figs.length + "개 PNG가 저장되었습니다.";
+          status.textContent = "Done. " + figs.length + " PNG(s) saved to the selected folder.";
         }} else {{
           for (let i = 0; i < figs.length; i++) {{
             const item = figs[i];
-            status.textContent = "다운로드 중... (" + (i+1) + "/" + figs.length + ") " + item.name + ".png";
+            status.textContent = "Downloading... (" + (i+1) + "/" + figs.length + ") " + item.name + ".png";
             const div = document.createElement("div");
             scratch.appendChild(div);
             await Plotly.newPlot(div, item.data, item.layout, {{displayModeBar: false, responsive: false}});
@@ -1018,10 +1015,10 @@ def _render_client_side_download_all(fig_list, *, width=None, height=None, scale
             div.remove();
             await sleep(350);
           }}
-          status.textContent = "완료. (폴더에 저장하려면 Chrome/Edge에서 다시 시도하세요)";
+          status.textContent = "Done. (Use Chrome/Edge to save to a folder.)";
         }}
       }} catch (e) {{
-        status.textContent = "실패: " + (e && e.message ? e.message : String(e));
+        status.textContent = "Failed: " + (e && e.message ? e.message : String(e));
       }} finally {{
         btn.disabled = false;
         btn.style.opacity = "1";
@@ -3420,10 +3417,7 @@ def data_load_mode(st):
                         else:
                             if total_plots == 0:
                                 st.caption("No plots to export")
-                            else:
-                                # 서버 PNG가 일부/전체 실패한 경우: 브라우저에서 일괄 PNG 다운로드 버튼 제공
-                                st.caption(f"Server PNG: {len(successful_exports)}/{total_plots} successful")
-                                _render_client_side_download_all(fig_list, iframe_height=120)
+                            # 서버 PNG 변환 실패 시 브라우저에서 플롯별로 직접 다운로드하므로 일괄 저장 버튼은 표시하지 않음
 
                 except Exception as export_err:
                     st.warning(f"Error in Export Plots tab: {export_err}")

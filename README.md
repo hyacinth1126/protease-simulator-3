@@ -3,11 +3,11 @@
 ## 빠른 실행 (venv)
 
 이 프로젝트는 가상환경(venv) 사용을 권장합니다. 다른 프로젝트와 패키지 충돌을 피할 수 있습니다.
-
+ 
 **1. venv 활성화 (PowerShell)**
 
 ```powershell
-cd c:\hyacinth1126\6-protease-simulator-3
+cd c:\hyacinth1126\protease-simulator-3
 .\venv\Scripts\Activate.ps1
 ```
 

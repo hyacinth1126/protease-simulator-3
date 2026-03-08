@@ -3342,7 +3342,16 @@ def data_load_mode(st):
 
                     # 모든 플롯이 성공적으로 렌더링된 경우에만 ZIP 데이터 생성
                     zip_bytes = b""
+                    zip_bytes_folder = b""
+                    folder_zip_name = "all_analysis_plots.zip"
                     if all_success:
+                        uploaded_filename = os.path.basename(str(results.get("uploaded_filename") or "").strip())
+                        base = ""
+                        if uploaded_filename:
+                            base = uploaded_filename.rsplit(".", 1)[0]
+                            if base.startswith("raw_"):
+                                base = base[4:]
+
                         zip_buffer = BytesIO()
                         with zipfile.ZipFile(zip_buffer, 'w', zipfile.ZIP_DEFLATED) as zf:
                             for item in successful_exports:
@@ -3350,29 +3359,44 @@ def data_load_mode(st):
                         zip_buffer.seek(0)
                         zip_bytes = zip_buffer.getvalue()
 
+                        # 동일한 PNG를 하나의 폴더 안에 넣은 ZIP (압축 해제 시 한 폴더에 순서대로 저장)
+                        folder_name = f"plots_{base}" if base else "analysis_plots"
+                        folder_zip_name = f"plots_folder_{base}.zip" if base else "analysis_plots_folder.zip"
+                        zip_buffer_folder = BytesIO()
+                        with zipfile.ZipFile(zip_buffer_folder, 'w', zipfile.ZIP_DEFLATED) as zf:
+                            for item in successful_exports:
+                                zf.writestr(f"{folder_name}/{item['name']}.png", item["png_bytes"])
+                        zip_buffer_folder.seek(0)
+                        zip_bytes_folder = zip_buffer_folder.getvalue()
+
                     # 상단 오른쪽 플레이스홀더를 ZIP 버튼(또는 안내)으로 갱신
                     download_all_enabled = all_success and bool(zip_bytes)
                     _zip_button_placeholder.empty()
                     with _zip_button_placeholder.container():
                         if download_all_enabled:
-                            # ZIP filename based on uploaded file name:
-                            # raw_*.ext -> plots_*.zip, otherwise plots_<name>.zip
-                            uploaded_filename = os.path.basename(str(results.get("uploaded_filename") or "").strip())
+                            # ZIP filename based on uploaded file name
                             zip_download_name = "all_analysis_plots.zip"
-                            if uploaded_filename:
-                                base = uploaded_filename.rsplit(".", 1)[0]
-                                if base.startswith("raw_"):
-                                    base = base[4:]
-                                if base:
-                                    zip_download_name = f"plots_{base}.zip"
-                            st.download_button(
-                                label="📥 Download ALL Plots (ZIP)",
-                                data=zip_bytes,
-                                file_name=zip_download_name,
-                                mime="application/zip",
-                                use_container_width=True,
-                                key="export_all_plots_zip_download"
-                            )
+                            if base:
+                                zip_download_name = f"plots_{base}.zip"
+                            _btn_col1, _btn_col2 = st.columns(2)
+                            with _btn_col1:
+                                st.download_button(
+                                    label="📥 Download ALL Plots (ZIP)",
+                                    data=zip_bytes,
+                                    file_name=zip_download_name,
+                                    mime="application/zip",
+                                    use_container_width=True,
+                                    key="export_all_plots_zip_download"
+                                )
+                            with _btn_col2:
+                                st.download_button(
+                                    label="💾 Save PNGs to folder (ZIP)",
+                                    data=zip_bytes_folder,
+                                    file_name=folder_zip_name,
+                                    mime="application/zip",
+                                    use_container_width=True,
+                                    key="export_all_plots_folder_zip_download"
+                                )
                         else:
                             if total_plots == 0:
                                 st.caption("No plots to export")

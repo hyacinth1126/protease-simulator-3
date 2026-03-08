@@ -949,11 +949,11 @@ def _render_client_side_download_all(fig_list, *, width=None, height=None, scale
     padding: 8px 12px; border-radius: 10px; border: 1px solid rgba(49,51,63,0.25);
     background: white; cursor: pointer; font-size: 14px; width: 100%;
   ">
-    📥 Download ALL PNGs (browser)
+    📥 전체 PNG 저장 (폴더 선택 → 순서대로 저장)
   </button>
 </div>
 <div id="{div_id}_status" style="text-align:right; font-size:12px; color: rgba(49,51,63,0.65); margin-top:6px;">
-  서버 PNG 변환이 실패할 때 브라우저로 다운로드합니다.
+  버튼 한 번 누르면 폴더를 선택한 뒤, 맨 위 플롯부터 마지막 플롯까지 순서대로 PNG가 저장됩니다. (Chrome/Edge 권장)
 </div>
 <div id="{div_id}_scratch" style="width:0;height:0;overflow:hidden;"></div>
 <script src="https://cdn.plot.ly/plotly-2.30.0.min.js"></script>
@@ -966,6 +966,11 @@ def _render_client_side_download_all(fig_list, *, width=None, height=None, scale
     if (!btn || !status || !scratch) return;
 
     const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+    const w = {int(w)}, h = {int(h)}, s = {int(s)};
+
+    function dataUrlToBlob(dataUrl) {{
+      return fetch(dataUrl).then(r => r.blob());
+    }}
 
     btn.addEventListener("click", async () => {{
       if (typeof Plotly === "undefined") {{
@@ -975,24 +980,46 @@ def _render_client_side_download_all(fig_list, *, width=None, height=None, scale
       btn.disabled = true;
       btn.style.opacity = "0.7";
       try {{
-        for (let i = 0; i < figs.length; i++) {{
-          const item = figs[i];
-          status.textContent = `다운로드 중... (${i+1}/${{figs.length}}) ${{item.name}}.png`;
-          const div = document.createElement("div");
-          scratch.appendChild(div);
-          await Plotly.newPlot(div, item.data, item.layout, {{displayModeBar: false, responsive: false}});
-          await Plotly.downloadImage(div, {{
-            format: "png",
-            filename: item.name,
-            width: {int(w)},
-            height: {int(h)},
-            scale: {int(s)}
-          }});
-          await Plotly.purge(div);
-          div.remove();
-          await sleep(350);
+        let dirHandle = null;
+        if (typeof window.showDirectoryPicker === "function") {{
+          try {{
+            dirHandle = await window.showDirectoryPicker();
+          }} catch (pickErr) {{
+            if (pickErr.name !== "AbortError") status.textContent = "폴더 선택 실패: " + (pickErr.message || String(pickErr));
+          }}
         }}
-        status.textContent = "완료. 다운로드가 막히면 브라우저에서 '다중 다운로드 허용'을 켜주세요.";
+        if (dirHandle) {{
+          for (let i = 0; i < figs.length; i++) {{
+            const item = figs[i];
+            status.textContent = "저장 중... (" + (i+1) + "/" + figs.length + ") " + item.name + ".png";
+            const div = document.createElement("div");
+            scratch.appendChild(div);
+            await Plotly.newPlot(div, item.data, item.layout, {{displayModeBar: false, responsive: false}});
+            const dataUrl = await Plotly.toImage(div, {{ format: "png", width: w, height: h, scale: s }});
+            await Plotly.purge(div);
+            div.remove();
+            const blob = await dataUrlToBlob(dataUrl);
+            const fileHandle = await dirHandle.getFileHandle(item.name + ".png", {{ create: true }});
+            const writable = await fileHandle.createWritable();
+            await writable.write(blob);
+            await writable.close();
+            await sleep(100);
+          }}
+          status.textContent = "완료. 선택한 폴더에 " + figs.length + "개 PNG가 저장되었습니다.";
+        }} else {{
+          for (let i = 0; i < figs.length; i++) {{
+            const item = figs[i];
+            status.textContent = "다운로드 중... (" + (i+1) + "/" + figs.length + ") " + item.name + ".png";
+            const div = document.createElement("div");
+            scratch.appendChild(div);
+            await Plotly.newPlot(div, item.data, item.layout, {{displayModeBar: false, responsive: false}});
+            await Plotly.downloadImage(div, {{ format: "png", filename: item.name, width: w, height: h, scale: s }});
+            await Plotly.purge(div);
+            div.remove();
+            await sleep(350);
+          }}
+          status.textContent = "완료. (폴더에 저장하려면 Chrome/Edge에서 다시 시도하세요)";
+        }}
       }} catch (e) {{
         status.textContent = "실패: " + (e && e.message ? e.message : String(e));
       }} finally {{
@@ -3318,9 +3345,6 @@ def data_load_mode(st):
                                 key=f"export_png_{idx}"
                             )
                         else:
-                            st.info(
-                                "서버에서 PNG 변환이 실패했습니다. 아래 버튼은 **브라우저에서 직접 PNG를 다운로드**합니다."
-                            )
                             _render_client_side_png_download(fig, name, iframe_height=760)
 
                         # 진행률 업데이트 (렌더링 중일 때만)

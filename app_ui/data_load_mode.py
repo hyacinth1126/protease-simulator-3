@@ -949,9 +949,7 @@ def _render_client_side_download_all(fig_list, *, width=None, height=None, scale
     📥 Save All PNG
   </button>
 </div>
-<div id="{div_id}_status" style="text-align:right; font-size:12px; color: rgba(49,51,63,0.65); margin-top:6px;">
-  Click to save all plots as PNGs in order. (Chrome/Edge recommended)
-</div>
+<div id="{div_id}_status" style="text-align:right; font-size:12px; color: rgba(49,51,63,0.65); margin-top:6px;"></div>
 <div id="{div_id}_scratch" style="width:0;height:0;overflow:hidden;"></div>
 <script src="https://cdn.plot.ly/plotly-2.30.0.min.js"></script>
 <script>

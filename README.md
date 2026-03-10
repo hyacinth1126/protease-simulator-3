@@ -225,6 +225,90 @@ streamlit run app.py
 
 ---
 
+## v₀ vs [E] Linear Fit 해석
+
+### 1. Michaelis–Menten 식에서 출발
+
+Michaelis–Menten 식:
+
+\[
+v_0 = \frac{V_\text{max}[S]}{K_M + [S]}, \quad V_\text{max} = k_\text{cat}[E]_T
+\]
+
+기질 농도 \([S]\) 를 고정하면:
+
+\[
+v_0 = \frac{k_\text{cat}[E]_T [S]}{K_M + [S]}
+\]
+
+여기서 \(\dfrac{k_\text{cat}[S]}{K_M + [S]}\) 는 상수이므로,
+
+\[
+v_0 = \underbrace{\left(\frac{k_\text{cat}[S]}{K_M + [S]}\right)}_{\text{slope}} \cdot [E]
+\]
+
+즉, **이론적으로 v₀ vs [E]는 원점을 지나는 직선**이고, 그 기울기(slope)는
+
+\[
+\text{slope} = \frac{k_\text{cat}[S]}{K_M + [S]}
+\]
+
+가 됩니다.
+
+- **저농도 기질** \([S] \ll K_M\) 이면  
+  \[
+  \text{slope} \approx \frac{k_\text{cat}}{K_M}[S]
+  \]  
+  → \(k_\text{cat}/K_M\) 와 \([S]\) 의 곱.
+- **고농도 기질** \([S] \gg K_M\) 이면  
+  \[
+  \text{slope} \approx k_\text{cat}
+  \]  
+  → v₀가 [E]에 대해 거의 \(k_\text{cat}[E]\) 형태.
+
+### 2. 앱에서의 선형 피팅 방식
+
+Model Simulation 모드에서 **Enzyme concentration variation (고정 기질, v₀ vs [E])** 인 경우:
+
+- 데이터: 여러 효소 농도 \([E]_i\) 에 대한 초기 속도 측정값 \(v_{0,i}\)
+- 이 점들에 대해 **최소제곱 선형 회귀**를 수행:
+
+\[
+v_0 \approx a[E] + b
+\]
+
+여기서
+
+- \(a\): **fit slope** – 이론적으로는 \(\dfrac{k_\text{cat}[S]}{K_M + [S]}\) 에 대응하는 값  
+- \(b\): **intercept** – 이론적으로는 0이어야 하지만, 노이즈·베이스라인·v₀ 추정 편향 등을 흡수하기 위해 자유롭게 둠
+
+그래서:
+
+- **기울기 \(a\)**: Michaelis–Menten 식에서 나온 계수 \(\dfrac{k_\text{cat}[S]}{K_M + [S]}\) 의 실험적 추정치  
+- **절편 \(b\)**: 실험/피팅 상의 오차(베이스라인, 모델 미스매치 등)를 흡수하는 항
+
+앱은
+
+1. **\(a, b\) 둘 다 자유**인 일반 선형 회귀 결과를 기본 v₀ vs [E] 플롯에서 보여주고,
+2. 추가로 **“(0,0) 강제” 플롯**에서 \(b = 0\) 으로 고정된,  
+   \[
+   v_0 = a_\text{origin}[E]
+   \]
+   형태의 피팅을 별도로 제시해 Michaelis–Menten 이론(원점 통과 직선)과의 비교가 가능하도록 합니다.
+
+### 3. 해석 포인트 정리
+
+- **이론적 관점**:  
+  - v₀ vs [E]는 이상적으로 \(v_0 = (k_\text{cat}[S]/(K_M + [S]))[E]\) 형태의 **원점 통과 직선**.  
+  - slope → Michaelis–Menten이 예측하는 계수.
+- **실무/리뷰어 관점**:  
+  - intercept 포함 선형 피팅과, (0,0) 강제 피팅을 **둘 다** 보고  
+    - 데이터가 이론과 얼마나 일치하는지,  
+    - baseline/초기 속도 추정/고농도 효과 등 실험적 요인이 얼마나 큰지  
+    를 함께 판단하는 구조입니다.
+
+---
+
 ## Plateau height가 enzyme 농도에 따라 다를 때 (리뷰어 대응)
 
 - **이론**: 기질 양이 동일하면 완전 절단 시 형광 F_∞는 일정해야 하므로, 이상적으로는 plateau height는 [E]와 무관하게 같아야 한다.

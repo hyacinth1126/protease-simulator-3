@@ -694,9 +694,10 @@ def general_analysis_mode(st):
             st.info("No data available.")
     
     # Tabs for different views
-    tab1, tab_v0_window, tab_alpha, tab_evsalpha, tab2, tab3, tab4 = st.tabs([
+    tab1, tab_v0_window, tab_kobs, tab_alpha, tab_evsalpha, tab2, tab3, tab4 = st.tabs([
         "📊 v₀ vs [S] Fit",
         "🕐 v₀ vs [E] by window",
+        "📉 k_obs vs [E]",
         "📈 Alpha Calculation",
         "📊 [E] vs α Plot",
         "🔬 Model Fitting",
@@ -972,6 +973,57 @@ def general_analysis_mode(st):
                 hovermode='x unified'
             )
             st.plotly_chart(fig_v0, use_container_width=True)
+            
+            # v₀ vs [E]일 때만: (0,0) 통과 강제 선형 피팅 플롯
+            is_enzyme_linear = (
+                mm_fit.get('fit_success')
+                and mm_fit.get('slope') is not None
+                and 'Enzyme' in exp_type
+            )
+            if is_enzyme_linear and v0_data.get('concentrations') and v0_data.get('v0_values'):
+                x_vals = np.array(v0_data['concentrations'], dtype=float)
+                y_vals = np.array(v0_data['v0_values'], dtype=float)
+                # v₀ = slope * [E], (0,0) 통과 → slope = sum(x*y) / sum(x^2)
+                if np.any(x_vals != 0):
+                    slope_origin = float(np.sum(x_vals * y_vals) / np.sum(x_vals ** 2))
+                    y_fit_origin = slope_origin * x_vals
+                    ss_res = np.sum((y_vals - y_fit_origin) ** 2)
+                    ss_tot = np.sum((y_vals - np.mean(y_vals)) ** 2)
+                    r2_origin = 1 - (ss_res / ss_tot) if ss_tot > 0 else 0
+                else:
+                    slope_origin = 0
+                    r2_origin = 0
+                conc_min = min(x_vals)
+                conc_max = max(x_vals)
+                conc_range = np.linspace(0, conc_max * 1.1, 200)
+                v0_origin_line = slope_origin * conc_range
+                fig_v0_origin = go.Figure()
+                fig_v0_origin.add_trace(go.Scatter(
+                    x=x_vals.tolist(),
+                    y=y_vals.tolist(),
+                    mode='markers',
+                    name='Experimental v₀',
+                    marker=dict(size=10, color='red', line=dict(width=2, color='black'))
+                ))
+                fig_v0_origin.add_trace(go.Scatter(
+                    x=conc_range.tolist(),
+                    y=v0_origin_line.tolist(),
+                    mode='lines',
+                    name=f'v₀ = {slope_origin:.4f} × [E] (through origin)',
+                    line=dict(width=2.5, color='green', dash='dash')
+                ))
+                stats_origin = f"Slope = {slope_origin:.4f}<br>R² = {r2_origin:.4f}<br>(fit forced through 0,0)"
+                fig_v0_origin.add_annotation(
+                    xref="paper", yref="paper", x=0.05, y=0.95, xanchor='left', yanchor='top',
+                    text=stats_origin, showarrow=False, font=dict(size=11)
+                )
+                fig_v0_origin.update_layout(
+                    title='v₀ vs [E] — Linear fit through (0, 0)',
+                    xaxis_title='[E] (μg/mL)',
+                    yaxis_title='Initial Velocity v₀ (Fluorescence Units / Time)',
+                    template='plotly_white', height=450, hovermode='x unified'
+                )
+                st.plotly_chart(fig_v0_origin, use_container_width=True)
             
             # Show table with additional columns
             st.subheader("📋 Experimental Data")
@@ -1322,6 +1374,100 @@ $F(t) = F_\\infty (1 - e^{-k_{\\mathrm{obs}} t})$
                 - **Mixing artifact이면**: v(t) **초반 낮음** → v(t) **상승 후 plateau** (혼합 지연 후 안정).
                 """)
     
+    with tab_kobs:
+        st.subheader("📉 k_obs vs [E] (exponential fit → pseudo-first-order)")
+        st.caption("기질이 일정하고 pseudo-first-order에 가깝다면, 각 progress curve를 지수 피팅하여 k_obs를 추출한 뒤 **k_obs가 [E]에 비례**하는지 보는 것이 v₀ vs [E]보다 더 자연스럽고 설득력 있습니다.")
+        exp_type_kobs = (mm_fit or {}).get('experiment_type', '')
+        is_enzyme_var_kobs = exp_type_kobs in ("Enzyme Concentration Variation (Fixed substrate)", "Enzyme Concentration Variation", "Enzyme 농도 변화 (기질 고정)")
+        if not is_enzyme_var_kobs:
+            st.info("ℹ️ 이 탭은 **효소 농도 변화** 실험(기질 고정, v₀ vs [E])용입니다. 기질 농도 변화(MM) 실험에는 해당하지 않습니다.")
+        else:
+            conc_col_kobs = 'enzyme_ugml' if 'enzyme_ugml' in df_raw.columns else next((c for c in ['Concentration [ug/mL]', 'Concentration'] if c in df_raw.columns), None)
+            if conc_col_kobs is None or 'time_min' not in df_raw.columns:
+                st.warning("Time–fluorescence 곡선이 없습니다. **Time–FLU Interpolated curves**가 포함된 파일을 업로드하거나 Data Load Mode를 실행하세요.")
+            else:
+                flu_col_kobs = 'FL_intensity' if 'FL_intensity' in df_raw.columns else 'RFU_Interpolated'
+                if flu_col_kobs not in df_raw.columns and 'RFU_Interpolated' in df_raw.columns:
+                    flu_col_kobs = 'RFU_Interpolated'
+                use_three_param_kobs = st.checkbox("3-parameter fit: F₀ + (F∞ − F₀)(1 − e^(−k_obs·t))", value=True, key="kobs_tab_three_param")
+                try:
+                    progress_results_kobs, linear_result_kobs = fit_progress_curves_pseudo_first_order(
+                        df_raw,
+                        conc_col=conc_col_kobs,
+                        time_col='time_min',
+                        fluor_col=flu_col_kobs,
+                        enzyme_mw_kda=float(enzyme_mw),
+                        use_three_param=use_three_param_kobs,
+                    )
+                except Exception as e:
+                    progress_results_kobs = []
+                    linear_result_kobs = None
+                    st.warning(f"Progress curve 피팅 실패: {e}")
+                if len(progress_results_kobs) >= 2 and linear_result_kobs is not None:
+                    # 1) Progress curves with exponential fit overlay (optional expander)
+                    with st.expander("📈 각 농도별 progress curve + exponential fit", expanded=False):
+                        colors_curves = ['#1f77b4', '#ff7f0e', '#2ca02c', '#d62728', '#9467bd', '#8c564b', '#e377c2', '#7f7f7f']
+                        fig_curves = go.Figure()
+                        for i, r in enumerate(progress_results_kobs):
+                            sub = df_raw[df_raw[conc_col_kobs] == r.conc].sort_values('time_min')
+                            if len(sub) < 2:
+                                continue
+                            t_min = sub['time_min'].values.astype(float)
+                            F = sub[flu_col_kobs].values.astype(float)
+                            c = colors_curves[i % len(colors_curves)]
+                            fig_curves.add_trace(go.Scatter(x=t_min, y=F, mode='markers', name=f"[E] = {r.conc:.2f} μg/mL (data)", marker=dict(size=4, color=c)))
+                            t_s = t_min * 60.0
+                            F_fit = r.F0 + (r.F_inf - r.F0) * (1.0 - np.exp(-r.k_obs_per_s * t_s))
+                            fig_curves.add_trace(go.Scatter(x=t_min, y=F_fit, mode='lines', name=f"[E] = {r.conc:.2f} fit (k_obs={r.k_obs_per_s:.4f} s⁻¹)", line=dict(dash='dash', color=c)))
+                        fig_curves.update_layout(
+                            title="Progress curves with exponential fit F(t) = F₀ + (F∞ − F₀)(1 − e^(−k_obs·t))",
+                            xaxis_title="Time (min)", yaxis_title="Fluorescence",
+                            template="plotly_white", height=450, hovermode="x unified",
+                        )
+                        st.plotly_chart(fig_curves, use_container_width=True)
+                    # 2) k_obs vs [E] plot + linear fit
+                    concs_display_kobs = [r.conc for r in progress_results_kobs]
+                    k_obs_s_kobs = [r.k_obs_per_s for r in progress_results_kobs]
+                    fig_kobs = go.Figure()
+                    fig_kobs.add_trace(go.Scatter(x=concs_display_kobs, y=k_obs_s_kobs, mode='markers', name="k_obs (s⁻¹)", marker=dict(size=12, color='#1f77b4')))
+                    slope_kobs = linear_result_kobs.slope_M_inv_s
+                    intercept_kobs = linear_result_kobs.intercept_per_s
+                    x_line_ugml = np.linspace(min(concs_display_kobs), max(concs_display_kobs), 50)
+                    E_M_line = (x_line_ugml / enzyme_mw) * 1e-6
+                    y_line = slope_kobs * E_M_line + intercept_kobs
+                    fig_kobs.add_trace(go.Scatter(x=x_line_ugml.tolist(), y=y_line.tolist(), mode='lines', name="Linear fit k_obs vs [E]", line=dict(dash='dash', color='#ff7f0e')))
+                    fig_kobs.update_layout(
+                        title="k_obs vs [E] (pseudo-first-order)",
+                        xaxis_title="[E] (μg/mL)",
+                        yaxis_title="k_obs (s⁻¹)",
+                        template="plotly_white",
+                        height=420,
+                        hovermode="x unified",
+                    )
+                    st.plotly_chart(fig_kobs, use_container_width=True)
+                    st.markdown(f"**선형성**: R² = {linear_result_kobs.r_squared:.4f} — linear에 가까우면 **pseudo-first-order kinetics**로 설명 가능.")
+                    st.markdown(f"**k_cat/K_M** (slope of k_obs vs [E] in M): **{slope_kobs:.3e}** M⁻¹ s⁻¹ (± {linear_result_kobs.slope_std:.3e}).")
+                    table_kobs = pd.DataFrame({
+                        "[E] (μg/mL)": [r.conc for r in progress_results_kobs],
+                        "k_obs (s⁻¹)": [f"{r.k_obs_per_s:.6f}" for r in progress_results_kobs],
+                        "k_obs std": [f"{r.k_obs_std:.4e}" for r in progress_results_kobs],
+                        "F₀": [f"{r.F0:.2f}" for r in progress_results_kobs],
+                        "F∞": [f"{r.F_inf:.2f}" for r in progress_results_kobs],
+                        "R²": [f"{r.r_squared:.4f}" for r in progress_results_kobs],
+                    })
+                    st.dataframe(table_kobs, use_container_width=True, hide_index=True)
+                elif len(progress_results_kobs) == 1:
+                    st.warning("k_obs 피팅에 성공한 농도가 1개뿐이라 k_obs vs [E] 선형 회귀를 할 수 없습니다.")
+                    st.dataframe(pd.DataFrame({
+                        "[E] (μg/mL)": [r.conc for r in progress_results_kobs],
+                        "k_obs (s⁻¹)": [f"{r.k_obs_per_s:.6f}" for r in progress_results_kobs],
+                        "F₀": [f"{r.F0:.2f}" for r in progress_results_kobs],
+                        "F∞": [f"{r.F_inf:.2f}" for r in progress_results_kobs],
+                        "R²": [f"{r.r_squared:.4f}" for r in progress_results_kobs],
+                    }), use_container_width=True, hide_index=True)
+                else:
+                    st.warning("k_obs 피팅에 성공한 농도가 없습니다. 데이터 구간 또는 농도 수를 확인하세요.")
+
     with tab_alpha:
         st.subheader("📈 Alpha (α) Calculation")
 

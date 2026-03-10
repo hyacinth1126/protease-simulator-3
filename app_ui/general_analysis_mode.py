@@ -1718,14 +1718,53 @@ $F(t) = F_\\infty (1 - e^{-k_{\\mathrm{obs}} t})$
             - **ΔAIC > 10**: Lower-AIC model is strongly preferred
             """)
         
+        # Fmax vs [E] 설명용 플롯 (plateau가 [E]에 따라 다를 때 해석)
+        conc_col_fit = None
+        if 'enzyme_ugml' in df.columns:
+            conc_col_fit = 'enzyme_ugml'
+        elif 'conc_col_name' in df.columns and len(df) > 0:
+            conc_col_fit = df['conc_col_name'].iloc[0]
+        else:
+            for c in df.columns:
+                if 'conc' in c.lower() or 'enzyme' in c.lower() or 'ugml' in c.lower():
+                    conc_col_fit = c
+                    break
+        if conc_col_fit and 'Fmax' in df.columns:
+            st.markdown("**📊 Fmax vs [E] (plateau dependence)**")
+            st.caption("동일 기질에서 완전 절단이면 Fmax는 [E]와 무관해야 하나, 실험 시간 내 불완전 절단이나 기질 접근성(hydrogel)이 있으면 고농도에서 plateau가 더 높게 관측됩니다. Fmax가 [E]에 따라 증가하면 Model D(Concentration-Dependent Fmax) 고려.")
+            fmax_by_conc = df.groupby(conc_col_fit).agg(Fmax=('Fmax', 'first')).reset_index()
+            fmax_by_conc[conc_col_fit] = fmax_by_conc[conc_col_fit].astype(float)
+            fmax_by_conc = fmax_by_conc.sort_values(conc_col_fit)
+            fig_fmax = go.Figure()
+            fig_fmax.add_trace(go.Scatter(
+                x=fmax_by_conc[conc_col_fit],
+                y=fmax_by_conc['Fmax'],
+                mode='lines+markers',
+                name='Fmax',
+                line=dict(width=2, color='#1f77b4'),
+                marker=dict(size=10, color='#1f77b4')
+            ))
+            fig_fmax.update_layout(
+                title="Fmax (plateau) vs Enzyme Concentration",
+                xaxis_title=f"[E] ({conc_unit})",
+                yaxis_title="Fmax (RFU)",
+                template="plotly_white",
+                height=380,
+                hovermode="x unified",
+            )
+            st.plotly_chart(fig_fmax, use_container_width=True)
+            st.markdown("---")
+        
         st.markdown("**Basic models (A–C)**: Classical enzyme kinetics")
         
-        # Model selection — 한동안 Model A만 활성화, 나머지 B–F 숨김
         fit_model_a = st.checkbox("Model A: Substrate Depletion", value=True)
         st.caption("✓ First-order reaction & substrate depletion")
         fit_model_b = False
         fit_model_c = False
-        fit_model_d = False
+        
+        st.markdown("**Extended models (D–F)**: Fmax depends on [E]")
+        fit_model_d = st.checkbox("Model D: Concentration-Dependent Fmax", value=False)
+        st.caption("✓ Plateau가 효소 농도에 따라 증가할 때 (기질 접근성/침투)")
         fit_model_e = False
         fit_model_f = False
         

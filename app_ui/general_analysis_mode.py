@@ -5,6 +5,8 @@ import streamlit as st
 import plotly.graph_objects as go
 import numpy as np
 import os
+import zipfile
+from io import BytesIO
 from pathlib import Path
 from scipy.optimize import curve_fit
 
@@ -24,12 +26,6 @@ from mode_general_analysis.analysis import (
     UnitStandardizer,
     DataNormalizer,
     RegionDivider,
-    ModelA_SubstrateDepletion,
-    ModelB_EnzymeDeactivation,
-    ModelC_MassTransfer,
-    ModelD_ConcentrationDependentFmax,
-    ModelE_ProductInhibition,
-    ModelF_EnzymeSurfaceSequestration,
     fit_progress_curves_pseudo_first_order,
     ProgressCurveFitResult,
     KobsVsELinearResult,
@@ -42,6 +38,7 @@ from app_ui.data_load_mode import (
     _build_v0_fig as _dl_build_v0_fig,
     _build_v0_supplementary_fig as _dl_build_v0_supplementary_fig,
     _apply_display_layout_like_export as _dl_apply_display_layout_like_export,
+    _export_fig_to_png_bytes as _dl_export_fig_to_png_bytes,
 )
 _debug_log("module load: general_analysis_mode imports complete")
 
@@ -709,16 +706,24 @@ def general_analysis_mode(st):
     # Tabs for different views
     # Default to enzyme-based label when experiment type is not yet available.
     v0_fit_tab_title = "📊 v₀ vs [S] Fit" if _is_substrate_experiment(experiment_type) else "📊 v₀ vs [E] Linear Fit"
-    tab1, tab_v0_window, tab_kobs, tab_alpha, tab_evsalpha, tab2, tab3, tab4 = st.tabs([
+    tab1, tab_v0_window, tab_kobs, tab_alpha, tab_evsalpha, tab_export = st.tabs([
         v0_fit_tab_title,
         "🕐 v₀ vs [E] by window",
         "📉 k_obs vs [E]",
         "📈 Alpha Calculation",
         "📊 [E] vs α Plot",
-        "🔬 Model Fitting",
-        "📉 Model Comparison",
-        "💡 Diagnostic Analysis"
+        "📤 Export Tables & Plots",
     ])
+
+    # Export tab payloads (filled by each tab below)
+    fig_v0_export = None
+    fig_v0_supp_export = None
+    df_v0_table_export = None
+    fig_alpha_export = None
+    df_alpha_stats_export = None
+    df_alpha_download_export = None
+    fig_ev_export = None
+    df_ev_export = None
     
     with tab1:
         # Data preparation
@@ -924,6 +929,7 @@ def general_analysis_mode(st):
             fig_v0 = _dl_build_v0_fig(dl_like_results)
             fig_v0 = _dl_apply_display_layout_like_export(fig_v0)
             st.plotly_chart(fig_v0, use_container_width=True)
+            fig_v0_export = go.Figure(fig_v0)
 
             if not _is_substrate_experiment(exp_type):
                 fig_v0_supp = _dl_build_v0_supplementary_fig(dl_like_results)
@@ -931,6 +937,7 @@ def general_analysis_mode(st):
                     st.info("Overall linear fit R² is below 0.8. Showing supplementary low-3 linear fit and (if 5 points exist) a constant fit for 3rd-5th [E].")
                     fig_v0_supp = _dl_apply_display_layout_like_export(fig_v0_supp)
                     st.plotly_chart(fig_v0_supp, use_container_width=True)
+                    fig_v0_supp_export = go.Figure(fig_v0_supp)
             
             # Show table with additional columns
             st.subheader("📋 Experimental Data")
@@ -978,6 +985,7 @@ def general_analysis_mode(st):
             
             df_table = pd.DataFrame(table_data).sort_values(xaxis_title)
             st.dataframe(df_table, use_container_width=True, hide_index=True)
+            df_v0_table_export = df_table.copy()
                  
         else:
             st.info("⚠️ No Michaelis-Menten fitting data. Run analysis in Data Load Mode or load a result file that includes the 'Michaelis-Menten Fit Results' sheet.")
@@ -1462,6 +1470,7 @@ $F(t) = F_\\infty (1 - e^{-k_{\\mathrm{obs}} t})$
             else:
                 fig_alpha.update_xaxes(range=[0, original_time_max])
             st.plotly_chart(fig_alpha, use_container_width=True)
+            fig_alpha_export = go.Figure(fig_alpha)
             
             # Alpha Statistics
             st.subheader("📋 Alpha Statistics by Concentration")
@@ -1478,7 +1487,9 @@ $F(t) = F_\\infty (1 - e^{-k_{\\mathrm{obs}} t})$
                         'Alpha std': f"{subset['alpha'].std():.4f}"
                     })
                 
-                st.dataframe(pd.DataFrame(alpha_stats), use_container_width=True, hide_index=True)
+                df_alpha_stats = pd.DataFrame(alpha_stats)
+                st.dataframe(df_alpha_stats, use_container_width=True, hide_index=True)
+                df_alpha_stats_export = df_alpha_stats.copy()
             
             # F0, Fmax 정보
             st.subheader("🔬 Normalization Parameters (F₀, Fmax)")
@@ -1594,6 +1605,7 @@ $F(t) = F_\\infty (1 - e^{-k_{\\mathrm{obs}} t})$
             # Alpha 데이터 준비
             alpha_download_df = df[['time_s', conc_col, 'alpha', 'F0', 'Fmax']].copy() if conc_col else df[['time_s', 'alpha', 'F0', 'Fmax']].copy()
             alpha_download_df = alpha_download_df.sort_values(['time_s', conc_col] if conc_col else 'time_s')
+            df_alpha_download_export = alpha_download_df.copy()
             
             csv_alpha = alpha_download_df.to_csv(index=False)
             st.download_button(
@@ -1697,6 +1709,8 @@ $F(t) = F_\\infty (1 - e^{-k_{\\mathrm{obs}} t})$
                     legend=dict(orientation='h', yanchor='bottom', y=1.02, xanchor='right', x=1)
                 )
                 st.plotly_chart(fig_ev, use_container_width=True)
+                fig_ev_export = go.Figure(fig_ev)
+                df_ev_export = agg.copy()
                 if fit_results:
                     st.markdown("**Fit models**")
                     st.latex(r"\text{Exponential: } \alpha = \alpha_{max}(1 - e^{-k[E]}) \quad \text{Hyperbolic: } \alpha = \frac{\alpha_{max}[E]}{K_{half}+[E]}")
@@ -1712,515 +1726,97 @@ $F(t) = F_\\infty (1 - e^{-k_{\\mathrm{obs}} t})$
                             st.caption("Similar AIC → choose by interpretation (K_half = half-saturation [E] for Hyperbolic).")
                 with st.expander("📋 [E] vs α data", expanded=False):
                     st.dataframe(agg, use_container_width=True, hide_index=True)
-    
-    with tab2:
-        st.subheader("🔬 Global Model Fitting")
-        
-        with st.expander("📚 Kinetic Model Description", expanded=False):
-            st.markdown(r"""
-            This simulator provides six kinetic models for analyzing peptide substrate–enzyme reactions.
 
-            #### 1. Basic Models (A–C)
-            Based on classical enzyme kinetics; Fmax is assumed independent of enzyme concentration.
+    with tab_export:
+        st.subheader("📤 Export Tables & Plots")
+        st.caption("Save analysis tables as one XLSX workbook (multiple sheets) and plots as PNG (individually or bundled ZIP).")
 
-            **📌 Model A: Substrate Depletion**
-            - **Overview**: First-order reaction; rate decreases as substrate [S] is consumed.
-            - **Equations**:
-              $$ \alpha(t) = 1 - e^{-k_{obs} \cdot t} $$
-              $$ k_{obs} = \frac{k_{cat}}{K_M} \cdot [E] $$
-            - **Parameters**:
-              - $k_{cat}/K_M$: Catalytic efficiency ($M^{-1}s^{-1}$)
-            - **Notes**:
-              - At low [E], initial rate v₀ is linear in [E].
-              - At long times, all substrate is cleaved and α → 1.
+        table_items = []
+        if df_v0_table_export is not None and len(df_v0_table_export) > 0:
+            table_items.append(("v0_fit_table", df_v0_table_export))
+        if df_alpha_stats_export is not None and len(df_alpha_stats_export) > 0:
+            table_items.append(("alpha_stats_by_concentration", df_alpha_stats_export))
+        if df_alpha_download_export is not None and len(df_alpha_download_export) > 0:
+            table_items.append(("alpha_time_series", df_alpha_download_export))
+        if df_ev_export is not None and len(df_ev_export) > 0:
+            table_items.append(("E_vs_alpha_summary", df_ev_export))
 
-            **📌 Model B: Enzyme Deactivation**
-            - **Overview**: Enzyme gradually loses activity during the reaction.
-            - **Equations**:
-              Enzyme concentration decays exponentially: $[E]_t = [E]_0 \cdot e^{-k_d t}$
-              $$ \alpha(t) = 1 - \exp\left[-\frac{k_{cat}/K_M \cdot [E]_0}{k_d} (1 - e^{-k_d t})\right] $$
-            - **Parameters**:
-              - $k_{cat}/K_M$: Catalytic efficiency ($M^{-1}s^{-1}$)
-              - $k_d$: Deactivation rate constant ($s^{-1}$)
-            - **Notes**: Curve plateaus earlier than expected; reaction can stop with substrate left ($\alpha_{\infty} < 1$).
+        plot_items = []
+        if fig_v0_export is not None:
+            plot_items.append(("v0_fit_plot", fig_v0_export))
+        if fig_v0_supp_export is not None:
+            plot_items.append(("v0_supplementary_plot", fig_v0_supp_export))
+        if fig_alpha_export is not None:
+            plot_items.append(("alpha_vs_time_plot", fig_alpha_export))
+        if fig_ev_export is not None:
+            plot_items.append(("E_vs_alpha_plot", fig_ev_export))
 
-            **📌 Model C: Mass Transfer Limitation**
-            - **Overview**: Diffusion of enzyme to the substrate surface is slower than the reaction.
-            - **Equations**:
-              Surface enzyme concentration $[E]_s$ is lower than bulk $[E]_b$
-              $$ [E]_s \approx \frac{[E]_b}{1 + Da}, \quad Da = \frac{k_{cat} \Gamma_0}{K_M k_m} $$
-              $$ \alpha(t) = 1 - e^{-k_{obs} \cdot t}, \quad k_{obs} = \frac{k_{cat}}{K_M} [E]_s $$
-            - **Parameters**:
-              - $k_{cat}/K_M$: Catalytic efficiency
-              - $k_m$: Mass transfer coefficient ($m/s$)
-              - $\Gamma_0$: Initial surface substrate density ($pmol/cm^2$)
-            - **Notes**: At high [E], rate saturates due to diffusion limit.
+        st.markdown(f"- Tables: **{len(table_items)}**")
+        st.markdown(f"- Plots: **{len(plot_items)}**")
 
-            ---
-
-            #### 2. Extended Models (D–F)
-            Fmax (maximum fluorescence) depends on [E]; for more complex surface reactions.
-
-            **📌 Model D: Concentration-Dependent Fmax**
-            - **Overview**: Higher [E] allows access to more substrate (e.g. deeper gel penetration).
-            - **Equations**:
-              Maximum cleavage $\alpha_{max}$ depends on [E]
-              $$ \alpha(t) = \alpha_{max}([E]) \cdot (1 - e^{-k_{obs} t}) $$
-              $$ \alpha_{max}([E]) = \alpha_{\infty} \cdot (1 - e^{-k_{access} [E]}) $$
-            - **Parameters**:
-              - $k_{cat}/K_M$: Catalytic efficiency
-              - $\alpha_{\infty}$: Theoretical maximum cleavage
-              - $k_{access}$: Accessibility coefficient ($M^{-1}$)
-            - **Notes**: At low [E] only surface is cleaved; at high [E], Fmax increases.
-
-            **📌 Model E: Product Inhibition**
-            - **Overview**: Reaction product binds the active site and inhibits the enzyme.
-            - **Equations**:
-              Competitive inhibition
-              $$ \frac{d\alpha}{dt} = \frac{k_{obs}(1-\alpha)}{1 + K_{i,eff}\alpha} $$
-            - **Parameters**:
-              - $k_{cat}/K_M$: Catalytic efficiency
-              - $K_{i,eff}$: Effective inhibition constant (dimensionless, $[S]_0/K_i$)
-            - **Notes**: Rate drops sharply in the later phase.
-
-            **📌 Model F: Enzyme Surface Sequestration**
-            - **Overview**: Enzyme is irreversibly adsorbed to the surface or gel and unavailable for reaction.
-            - **Equations**:
-              Enzyme depleted by surface adsorption ($k_{ads}$)
-              $$ \alpha(t) \approx \frac{(k_{cat}/K_M)[E]}{k_{ads}(1+K_{ads}[E])} (1 - e^{-k_{ads} t}) $$
-            - **Parameters**:
-              - $k_{cat}/K_M$: Catalytic efficiency
-              - $k_{ads}$: Adsorption rate constant ($s^{-1}$)
-              - $K_{ads}$: Adsorption equilibrium constant ($M^{-1}$)
-            - **Notes**: Reactivity can be lower than expected even at high [E].
-
-            ### 📊 Model fit: AIC
-
-            **Akaike Information Criterion (AIC)**
-            Balances goodness of fit and model complexity; lower is better.
-
-            **Formula**:
-            $$ AIC = 2k - 2\ln(\hat{L}) $$
-            where:
-            - $k$: number of parameters
-            - $\hat{L}$: maximum likelihood
-
-            Here we use RSS-based:
-            $$ AIC = n \ln\left(\frac{RSS}{n}\right) + 2k + C $$
-            - $n$: number of data points
-            - $RSS$: residual sum of squares ($\sum (y_{obs} - y_{pred})^2$)
-            - $C$: constant
-
-            **Interpretation**:
-            - **ΔAIC < 2**: No significant difference between models
-            - **ΔAIC > 10**: Lower-AIC model is strongly preferred
-            """)
-        
-        # Fmax vs [E] 설명용 플롯 (plateau가 [E]에 따라 다를 때 해석)
-        conc_col_fit = None
-        if 'enzyme_ugml' in df.columns:
-            conc_col_fit = 'enzyme_ugml'
-        elif 'conc_col_name' in df.columns and len(df) > 0:
-            conc_col_fit = df['conc_col_name'].iloc[0]
-        else:
-            for c in df.columns:
-                if 'conc' in c.lower() or 'enzyme' in c.lower() or 'ugml' in c.lower():
-                    conc_col_fit = c
-                    break
-        if conc_col_fit and 'Fmax' in df.columns:
-            st.markdown("**📊 Fmax vs [E] (plateau dependence)**")
-            st.caption("동일 기질에서 완전 절단이면 Fmax는 [E]와 무관해야 하나, 실험 시간 내 불완전 절단이나 기질 접근성(hydrogel)이 있으면 고농도에서 plateau가 더 높게 관측됩니다. Fmax가 [E]에 따라 증가하면 Model D(Concentration-Dependent Fmax) 고려.")
-            fmax_by_conc = df.groupby(conc_col_fit).agg(Fmax=('Fmax', 'first')).reset_index()
-            fmax_by_conc[conc_col_fit] = fmax_by_conc[conc_col_fit].astype(float)
-            fmax_by_conc = fmax_by_conc.sort_values(conc_col_fit)
-            fig_fmax = go.Figure()
-            fig_fmax.add_trace(go.Scatter(
-                x=fmax_by_conc[conc_col_fit],
-                y=fmax_by_conc['Fmax'],
-                mode='lines+markers',
-                name='Fmax',
-                line=dict(width=2, color='#1f77b4'),
-                marker=dict(size=10, color='#1f77b4')
-            ))
-            fig_fmax.update_layout(
-                title="Fmax (plateau) vs Enzyme Concentration",
-                xaxis_title=f"[E] ({conc_unit})",
-                yaxis_title="Fmax (RFU)",
-                template="plotly_white",
-                height=380,
-                hovermode="x unified",
-            )
-            st.plotly_chart(fig_fmax, use_container_width=True)
-            st.markdown("---")
-        
-        st.markdown("**Basic models (A–C)**: Classical enzyme kinetics")
-        
-        fit_model_a = st.checkbox("Model A: Substrate Depletion", value=True)
-        st.caption("✓ First-order reaction & substrate depletion")
-        fit_model_b = False
-        fit_model_c = False
-        
-        st.markdown("**Extended models (D–F)**: Fmax depends on [E]")
-        fit_model_d = st.checkbox("Model D: Concentration-Dependent Fmax", value=False)
-        st.caption("✓ Plateau가 효소 농도에 따라 증가할 때 (기질 접근성/침투)")
-        fit_model_e = False
-        fit_model_f = False
-        
-        if st.button("🚀 Run Global Fitting", type="primary"):
-            # 데이터 상태 확인 및 검증
-            with st.expander("🔍 Data status", expanded=False):
-                st.write("**Required columns:**")
-                required_cols = ['alpha', 'time_s', 'FL_intensity']
-                missing_cols = [col for col in required_cols if col not in df.columns]
-                if missing_cols:
-                    st.error(f"❌ Missing columns: {missing_cols}")
-                    st.stop()
-                else:
-                    st.success(f"✅ Required columns present: {required_cols}")
-                
-                st.write("**Data statistics:**")
-                st.write(f"- Total data points: {len(df)}")
-                st.write(f"- Alpha range: {df['alpha'].min():.4f} ~ {df['alpha'].max():.4f}")
-                st.write(f"- Alpha mean: {df['alpha'].mean():.4f}")
-                st.write(f"- Alpha std: {df['alpha'].std():.4f}")
-                st.write(f"- Time range: {df['time_s'].min():.2f} ~ {df['time_s'].max():.2f} s")
-                
-                conc_col = 'enzyme_ugml' if 'enzyme_ugml' in df.columns else df['conc_col_name'].iloc[0] if 'conc_col_name' in df.columns else None
-                if conc_col:
-                    st.write("**Alpha statistics by concentration:**")
-                    conc_stats = df.groupby(conc_col)['alpha'].agg(['count', 'min', 'max', 'mean', 'std'])
-                    st.dataframe(conc_stats, use_container_width=True)
-                
-                if df['alpha'].max() < 0.1:
-                    st.warning("⚠️ All alpha values are below 0.1. Normalization may have failed.")
-                if df['alpha'].std() < 0.01:
-                    st.warning("⚠️ Alpha variability is very low. Data may not be properly normalized.")
-            
-            results = []
-            
-            # Create a status container
-            status_container = st.empty()
-            result_container = st.container()
-            
-            # Model A
-            if fit_model_a:
-                with status_container:
-                    with st.spinner("🔄 Fitting Model A: Substrate Depletion..."):
-                        model_a = ModelA_SubstrateDepletion(enzyme_mw=enzyme_mw)
-                        result_a = model_a.fit_global(df, verbose_callback=verbose_callback)
-                        results.append(result_a)
-                
-                if result_a:
-                    with result_container:
-                        st.success(f"✅ Model A done: R² = {result_a.r_squared:.4f}, AIC = {result_a.aic:.2f}")
-                else:
-                    with result_container:
-                        err = getattr(model_a, "_last_fit_error", None)
-                        st.error("❌ Model A fitting failed" + (f": {err}" if err else ""))
-                        if not err:
-                            st.caption("Possible causes: too few data points (need ≥5), alpha/time range issues, or optimizer did not converge. Check **Data status** expander above.")
-            
-            # Model B
-            if fit_model_b:
-                with status_container:
-                    with st.spinner("🔄 Fitting Model B: Enzyme Deactivation..."):
-                        model_b = ModelB_EnzymeDeactivation(enzyme_mw=enzyme_mw)
-                        result_b = model_b.fit_global(df, verbose_callback=verbose_callback)
-                        results.append(result_b)
-                
-                if result_b:
-                    with result_container:
-                        st.success(f"✅ Model B done: R² = {result_b.r_squared:.4f}, AIC = {result_b.aic:.2f}")
-                else:
-                    with result_container:
-                        st.error("❌ Model B fitting failed")
-            
-            # Model C
-            if fit_model_c:
-                with status_container:
-                    with st.spinner("🔄 Fitting Model C: Mass Transfer Limitation..."):
-                        model_c = ModelC_MassTransfer(enzyme_mw=enzyme_mw)
-                        result_c = model_c.fit_global(df, verbose_callback=verbose_callback)
-                        results.append(result_c)
-                
-                if result_c:
-                    with result_container:
-                        st.success(f"✅ Model C done: R² = {result_c.r_squared:.4f}, AIC = {result_c.aic:.2f}")
-                else:
-                    with result_container:
-                        st.error("❌ Model C fitting failed")
-            
-            # Model D
-            if fit_model_d:
-                with status_container:
-                    with st.spinner("🔄 Fitting Model D: Concentration-Dependent Fmax..."):
-                        model_d = ModelD_ConcentrationDependentFmax(enzyme_mw=enzyme_mw)
-                        result_d = model_d.fit_global(df, verbose_callback=verbose_callback)
-                        results.append(result_d)
-                
-                if result_d:
-                    with result_container:
-                        st.success(f"✅ Model D done: R² = {result_d.r_squared:.4f}, AIC = {result_d.aic:.2f}")
-                else:
-                    with result_container:
-                        st.error("❌ Model D fitting failed")
-            
-            # Model E
-            if fit_model_e:
-                with status_container:
-                    with st.spinner("🔄 Fitting Model E: Product Inhibition..."):
-                        model_e = ModelE_ProductInhibition(enzyme_mw=enzyme_mw)
-                        result_e = model_e.fit_global(df, verbose_callback=verbose_callback)
-                        results.append(result_e)
-                
-                if result_e:
-                    with result_container:
-                        st.success(f"✅ Model E done: R² = {result_e.r_squared:.4f}, AIC = {result_e.aic:.2f}")
-                else:
-                    with result_container:
-                        st.error("❌ Model E fitting failed")
-            
-            # Model F
-            if fit_model_f:
-                with status_container:
-                    with st.spinner("🔄 Fitting Model F: Enzyme Adsorption/Sequestration..."):
-                        model_f = ModelF_EnzymeSurfaceSequestration(enzyme_mw=enzyme_mw)
-                        result_f = model_f.fit_global(df, verbose_callback=verbose_callback)
-                        results.append(result_f)
-                
-                if result_f:
-                    with result_container:
-                        st.success(f"✅ Model F done: R² = {result_f.r_squared:.4f}, AIC = {result_f.aic:.2f}")
-                else:
-                    with result_container:
-                        st.error("❌ Model F fitting failed")
-            
-            # Clear status container after all done
-            status_container.empty()
-            
-            # Store results in session state
-            st.session_state['fit_results'] = results
-            st.session_state['df'] = df
-            
-            # Show completion message
-            with result_container:
-                st.success("🎉 All model fitting complete! Check results in the 'Model Comparison' tab.")
-    
-    with tab3:
-        if 'fit_results' in st.session_state:
-            results = st.session_state['fit_results']
-            df = st.session_state['df']
-            
-            st.subheader("📊 Model Comparison")
-            
-            # Comparison table
-            comparison_df = Visualizer.create_comparison_table(results)
-            st.dataframe(comparison_df, use_container_width=True)
-            
-            # Determine best model
-            valid_results = [r for r in results if r is not None]
-            if valid_results:
-                best_aic = min(r.aic for r in valid_results)
-                best_model = [r for r in valid_results if r.aic == best_aic][0]
-                
-                st.success(f"🏆 Best model (lowest AIC): **{best_model.name}** (AIC = {best_model.aic:.2f})")
-                
-                # Parameter details for best model
-                st.subheader(f"Best model parameters: {best_model.name}")
-                param_data = []
-                for param, value in best_model.params.items():
-                    std = best_model.params_std.get(param, 0)
-                    param_data.append({
-                        'Parameter': param,
-                        'Value': f"{value:.4e}",
-                        'Std. Error': f"{std:.4e}",
-                        'Rel. Error': f"{(std/value*100):.2f}%" if value != 0 else "N/A"
-                    })
-                st.dataframe(pd.DataFrame(param_data), use_container_width=True)
-            
-            # Plot all model fits
-            st.subheader("📈 Overall Model Fitting Results")
-            fig_models = Visualizer.plot_model_fits(df, results, conc_unit, time_label,
-                                                    enzyme_name=enzyme_name,
-                                                    substrate_name=substrate_name)
-            # 원본 시간 범위로 xaxis 설정
-            original_time_max = st.session_state.get('original_time_max', df['time_s'].max())
-            if time_unit == 'min':
-                fig_models.update_xaxes(range=[0, original_time_max])
-            else:
-                fig_models.update_xaxes(range=[0, original_time_max])
-            st.plotly_chart(fig_models, use_container_width=True)
-            
-            # Individual model plots
-            st.subheader("📊 Individual Model Comparison")
-            st.markdown("Compare raw data and fitted results for each model.")
-            
-            # Create tabs for each model
-            model_names = [r.name for r in results if r is not None]
-            
-            if len(model_names) > 0:
-                model_tabs_ui = st.tabs(model_names)
-                
-                for idx, (tab, result) in enumerate(zip(model_tabs_ui, [r for r in results if r is not None])):
-                    with tab:
-                        # Color scheme for each model
-                        model_colors = ['#FF6B6B', '#4ECDC4', '#FFD93D']
-                        color = model_colors[idx % len(model_colors)]
-                        
-                        # Display individual model plot
-                        fig_ind = Visualizer.plot_individual_model(df, result, conc_unit, time_label, color)
-                        # 원본 시간 범위로 xaxis 설정
-                        original_time_max = st.session_state.get('original_time_max', df['time_s'].max())
-                        if time_unit == 'min':
-                            fig_ind.update_xaxes(range=[0, original_time_max])
-                        else:
-                            fig_ind.update_xaxes(range=[0, original_time_max])
-                        st.plotly_chart(fig_ind, use_container_width=True)
-                        
-                        # Display parameters
-                        st.markdown(f"**{result.name} parameters**")
-                        param_cols = st.columns(len(result.params))
-                        for col_idx, (param, value) in enumerate(result.params.items()):
-                            with param_cols[col_idx]:
-                                std = result.params_std.get(param, 0)
-                                st.metric(
-                                    label=param,
-                                    value=f"{value:.4e}",
-                                    delta=f"±{std:.4e}" if std > 0 else None
-                                )
-            
-            # Download results
-            st.subheader("💾 Download Results")
-            csv = comparison_df.to_csv(index=False)
+        if table_items:
+            st.markdown("### Table Export (Single XLSX)")
+            xlsx_output = BytesIO()
+            with pd.ExcelWriter(xlsx_output, engine="openpyxl") as writer:
+                for table_name, table_df in table_items:
+                    sheet_map = {
+                        "v0_fit_table": "v0 fit table",
+                        "alpha_stats_by_concentration": "alpha stats",
+                        "alpha_time_series": "alpha time series",
+                        "E_vs_alpha_summary": "E vs alpha summary",
+                    }
+                    sheet_name = sheet_map.get(table_name, table_name)[:31]
+                    table_df.to_excel(writer, sheet_name=sheet_name, index=False)
+            xlsx_bytes = xlsx_output.getvalue()
             st.download_button(
-                label="Download comparison table (CSV)",
-                data=csv,
-                file_name="model_comparison.csv",
-                mime="text/csv"
+                label=f"📥 Save All Tables (XLSX, {len(table_items)} sheets)",
+                data=xlsx_bytes,
+                file_name="model_simulation_tables.xlsx",
+                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                key="general_export_tables_xlsx",
             )
+            for table_name, table_df in table_items:
+                with st.expander(f"📋 {table_name}", expanded=False):
+                    st.dataframe(table_df, use_container_width=True, hide_index=True, height=260)
         else:
-            st.info("👈 Please run fitting in the 'Model Fitting' tab first.")
-    
-    with tab4:
-        st.subheader("💡 Diagnostic Analysis")
-        
-        # Initial rate analysis
-        st.plotly_chart(
-            Visualizer.plot_initial_rates(df, conc_unit, time_unit), 
-            use_container_width=True
-        )
-        
-        st.markdown("""
-        ### 📋 Model selection guidelines
-        
-        #### Basic models (A–C)
-        
-        **Model A (Substrate depletion)** when:
-        - Initial rate v₀ is linear in [E] at low [E]
-        - Saturation fluorescence F∞ ≈ constant (α → 1)
-        - No significant enzyme deactivation
-        
-        **Model B (Enzyme deactivation)** when:
-        - F∞ < theoretical maximum (α < 1 at saturation)
-        - Fast initial rise then plateau lower than expected
-        - kd > 0 with significant contribution
-        
-        **Model C (Mass transfer)** when:
-        - Initial burst (0–5 s) then slower approach
-        - Sensitive to stirring/flow
-        - v₀ vs [E] saturates at high [E]
-        
-        #### Extended models (D–F): **Fmax depends on [E]**
-        
-        **Model D (Concentration-dependent Fmax)** when:
-        - α_max increases at higher [E] (more substrate access)
-        - Gel penetration depth (thick/dense gel)
-        - Secondary cleavage increases product release
-        - **Parameters**: α_∞, k_access
-        
-        **Model E (Product inhibition)** when:
-        - Fast initial rise then slowdown (product buildup)
-        - Stronger inhibition at low [E]
-        - Rate recovers when product is removed
-        - **Parameters**: Ki_eff
-        
-        **Model F (Enzyme adsorption/sequestration)** when:
-        - Less affected at high [E] (saturation)
-        - Negatively charged surface / PDA coating, dense gel
-        - Enzyme activity decreases over time (irreversible)
-        - **Parameters**: k_ads, K_ads
-        
-        ### 📊 Statistics
-        - **AIC/BIC**: Lower is better (parameter penalty)
-        - **R²**: Higher is better (>0.95 good)
-        - **RMSE**: Lower is better
-        - **Δ AIC > 10**: Strong evidence against the higher-AIC model
-        - **Δ AIC < 2**: No significant difference between models
-        """)
-        
-        # Experimental suggestions
-        st.subheader("🧪 Suggested Follow-up Experiments")
-        
-        st.markdown("""
-        ### 🔍 Experiments to check Fmax vs [E]
-        
-        1. **Long-time measurement at various [E]** (30 min–1 h)
-           - Measure saturation fluorescence (Fmax) per concentration
-           - Plot [E] vs Fmax → linear vs saturated
-           - **Linear increase** → Model D likely
-           - **Constant** → Basic models A–C
-        
-        2. **Gel thickness** (Model D)
-           - Thin (50 μm) vs thick (500 μm) gel
-           - Thick gel: stronger [E] dependence → diffusion/penetration limit
-           - Thin gel: [E]-independent → surface reaction dominant
-        
-        3. **Product addition** (Model E)
-           - Add pre-cleaved peptide
-           - Initial rate drops → product inhibition
-           - α_max decreases at high [product]
-        
-        4. **Surface treatment** (Model F)
-           - Positive vs negative (PDA) vs neutral (PEG) surface
-           - Negative surface: stronger [E] dependence → adsorption
-           - PEG: less adsorption → consider D/E
-        
-        ### 🧬 Classical mechanism tests
-        
-        5. **Pulse-chase** (Model B)
-           - Add fresh enzyme at t=5 min
-           - Curve rises again → substrate left (Model A)
-           - No change → enzyme deactivation (Model B)
-        
-        6. **Stirring/flow** (Model C)
-           - Static vs rotation (100 rpm) vs flow (1 mL/min)
-           - Higher flow → higher α → mass transfer limit
-           - No change → reaction-limited (A/B)
-        
-        7. **Substrate density** (Model A)
-           - 0.5×, 1×, 2× peptide immobilization
-           - Fmax scales → substrate depletion
-           - Fmax unchanged → other mechanism
-        
-        8. **Solution-phase control**
-           - Soluble substrate (same concentration)
-           - Full cleavage (α→1) → surface/diffusion issue
-           - Incomplete → intrinsic inhibition/deactivation
-        
-        ### 🎯 Model decision tree
-        
-        ```
-        Does Fmax increase with [E]?
-        ├─ YES → Test extended models (D–F)
-        │   ├─ Gel thickness sensitive? → Model D (penetration)
-        │   ├─ Product addition reduces rate? → Model E (inhibition)
-        │   └─ Surface charge sensitive? → Model F (adsorption)
-        │
-        └─ NO → Test basic models (A–C)
-            ├─ Pulse-chase response? → Model A (substrate)
-            ├─ α_max decreases with time? → Model B (deactivation)
-            └─ Flow sensitive? → Model C (diffusion)
-        ```
-        """)
+            st.info("No table data available for export.")
+
+        if plot_items:
+            st.markdown("### Plot Export (PNG)")
+            png_items = []
+            for plot_name, fig in plot_items:
+                fig_for_export = _dl_apply_display_layout_like_export(go.Figure(fig))
+                with st.expander(f"📈 {plot_name}", expanded=False):
+                    st.plotly_chart(fig_for_export, use_container_width=True)
+                    png_bytes = _dl_export_fig_to_png_bytes(fig_for_export, plot_name=plot_name)
+                    if png_bytes:
+                        st.download_button(
+                            label=f"💾 Save PNG ({plot_name})",
+                            data=png_bytes,
+                            file_name=f"{plot_name}.png",
+                            mime="image/png",
+                            key=f"general_export_png_{plot_name}",
+                        )
+                        png_items.append((plot_name, png_bytes))
+                    else:
+                        st.warning("PNG conversion failed for this plot in current environment.")
+
+            if png_items:
+                zip_buffer = BytesIO()
+                with zipfile.ZipFile(zip_buffer, "w", zipfile.ZIP_DEFLATED) as zf:
+                    for name, png_data in png_items:
+                        zf.writestr(f"{name}.png", png_data)
+                zip_buffer.seek(0)
+                st.download_button(
+                    label=f"📦 Save All PNG ({len(png_items)})",
+                    data=zip_buffer.getvalue(),
+                    file_name="model_simulation_plots.zip",
+                    mime="application/zip",
+                    key="general_export_all_png_zip",
+                )
+            else:
+                st.info("PNG files are not ready. Try running in a local environment with Plotly image export support.")
+        else:
+            st.info("No plot data available for export.")
 
 

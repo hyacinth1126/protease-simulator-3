@@ -3075,6 +3075,75 @@ def data_load_mode(st):
                         )
                     fig_v0 = _apply_display_layout_like_export(fig_v0)
                     st.plotly_chart(fig_v0, use_container_width=True)
+
+                    # 전체 선형 피팅 R²가 낮은 경우(기준 0.8): 최저 농도 3개만 사용한 보조 선형 피팅 추가 표시
+                    if exp_type != "Substrate Concentration Variation (Standard Michaelis-Menten)":
+                        r2_full = mm_fit.get('R_squared')
+                        conc_vals = np.array(v0_data.get('concentrations', []), dtype=float)
+                        v0_vals = np.array(v0_data.get('v0_values', []), dtype=float)
+                        if (
+                            r2_full is not None
+                            and r2_full < 0.8
+                            and len(conc_vals) >= 3
+                            and len(v0_vals) >= 3
+                            and len(conc_vals) == len(v0_vals)
+                        ):
+                            sort_idx = np.argsort(conc_vals)
+                            conc_sorted = conc_vals[sort_idx]
+                            v0_sorted = v0_vals[sort_idx]
+
+                            conc_fit = conc_sorted[:3]
+                            v0_fit = v0_sorted[:3]
+                            conc_excluded = conc_sorted[3:]
+                            v0_excluded = v0_sorted[3:]
+
+                            low3_slope, low3_intercept = np.polyfit(conc_fit, v0_fit, 1)
+                            v0_fit_pred = np.polyval([low3_slope, low3_intercept], conc_fit)
+                            ss_res_low3 = np.sum((v0_fit - v0_fit_pred) ** 2)
+                            ss_tot_low3 = np.sum((v0_fit - np.mean(v0_fit)) ** 2)
+                            low3_r2 = 1 - (ss_res_low3 / ss_tot_low3) if ss_tot_low3 > 0 else 1.0
+
+                            fig_v0_low3 = go.Figure()
+                            fig_v0_low3.add_trace(go.Scatter(
+                                x=conc_fit,
+                                y=v0_fit,
+                                mode='markers',
+                                name='Used for fit (lowest 3 [E])',
+                                marker=dict(size=10, color='red', line=dict(width=2, color='black'))
+                            ))
+                            if len(conc_excluded) > 0:
+                                fig_v0_low3.add_trace(go.Scatter(
+                                    x=conc_excluded,
+                                    y=v0_excluded,
+                                    mode='markers',
+                                    name='Not used in fit',
+                                    marker=dict(size=9, color='rgba(120,120,120,0.75)', line=dict(width=1, color='rgba(60,60,60,0.8)'))
+                                ))
+
+                            conc_low3_range = np.linspace(min(conc_fit), max(conc_fit), 100)
+                            v0_low3_line = low3_slope * conc_low3_range + low3_intercept
+                            fig_v0_low3.add_trace(go.Scatter(
+                                x=conc_low3_range,
+                                y=v0_low3_line,
+                                mode='lines',
+                                name=f'Low-3 Linear Fit: v₀ = {low3_slope:.4f} * [E] + {low3_intercept:.4f} (R² = {low3_r2:.4f})',
+                                line=dict(width=2.5, color='green', dash='dash')
+                            ))
+
+                            fig_v0_low3.update_layout(
+                                title='Supplementary Linear Fit Using Lowest 3 Enzyme Concentrations',
+                                xaxis_title='[E] (μg/mL)',
+                                yaxis_title='Initial Velocity v₀ (Fluorescence Units / Time)',
+                                template='plotly_white',
+                                height=550,
+                                hovermode='x unified',
+                                xaxis=dict(showline=True, mirror=True, ticks='outside'),
+                                yaxis=dict(showline=True, mirror=True, ticks='outside'),
+                                legend=dict(orientation='v', x=0.02, y=0.98, xanchor='left', yanchor='top', bgcolor='rgba(255,255,255,0.9)')
+                            )
+                            fig_v0_low3 = _apply_display_layout_like_export(fig_v0_low3)
+                            st.info("Overall linear fit R² is below 0.8. Showing supplementary fit using only the lowest 3 [E] points.")
+                            st.plotly_chart(fig_v0_low3, use_container_width=True)
                 else:
                     st.warning("No v₀ vs concentration data available.")
             

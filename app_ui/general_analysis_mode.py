@@ -39,6 +39,8 @@ from app_ui.data_load_mode import (
     _build_v0_supplementary_fig as _dl_build_v0_supplementary_fig,
     _apply_display_layout_like_export as _dl_apply_display_layout_like_export,
     _export_fig_to_png_bytes as _dl_export_fig_to_png_bytes,
+    _render_client_side_png_download as _dl_render_client_side_png_download,
+    _render_client_side_download_all as _dl_render_client_side_download_all,
 )
 _debug_log("module load: general_analysis_mode imports complete")
 
@@ -1784,22 +1786,26 @@ $F(t) = F_\\infty (1 - e^{-k_{\\mathrm{obs}} t})$
         if plot_items:
             st.markdown("### Plot Export (PNG)")
             png_items = []
-            for plot_name, fig in plot_items:
+            failed_plot_count = 0
+            for idx, (plot_name, fig) in enumerate(plot_items, start=1):
                 fig_for_export = _dl_apply_display_layout_like_export(go.Figure(fig))
                 with st.expander(f"📈 {plot_name}", expanded=False):
                     st.plotly_chart(fig_for_export, use_container_width=True)
                     png_bytes = _dl_export_fig_to_png_bytes(fig_for_export, plot_name=plot_name)
                     if png_bytes:
+                        ordered_name = f"{idx:02d}_{plot_name}"
                         st.download_button(
                             label=f"💾 Save PNG ({plot_name})",
                             data=png_bytes,
-                            file_name=f"{plot_name}.png",
+                            file_name=f"{ordered_name}.png",
                             mime="image/png",
                             key=f"general_export_png_{plot_name}",
                         )
-                        png_items.append((plot_name, png_bytes))
+                        png_items.append((ordered_name, png_bytes))
                     else:
-                        st.warning("PNG conversion failed for this plot in current environment.")
+                        failed_plot_count += 1
+                        st.info("Server PNG conversion failed. Falling back to browser-side single PNG download.")
+                        _dl_render_client_side_png_download(fig_for_export, f"{idx:02d}_{plot_name}", iframe_height=780)
 
             if png_items:
                 zip_buffer = BytesIO()
@@ -1814,8 +1820,20 @@ $F(t) = F_\\infty (1 - e^{-k_{\\mathrm{obs}} t})$
                     mime="application/zip",
                     key="general_export_all_png_zip",
                 )
+                if failed_plot_count > 0:
+                    st.info("Some plots failed on server-side PNG conversion. Use browser-side Save All PNG to download every plot in order.")
+                    ordered_plot_items = [
+                        (f"{idx:02d}_{plot_name}", fig)
+                        for idx, (plot_name, fig) in enumerate(plot_items, start=1)
+                    ]
+                    _dl_render_client_side_download_all(ordered_plot_items, iframe_height=100)
             else:
-                st.info("PNG files are not ready. Try running in a local environment with Plotly image export support.")
+                st.info("Server ZIP export is unavailable in this environment. Using browser-side Save All PNG fallback.")
+                ordered_plot_items = [
+                    (f"{idx:02d}_{plot_name}", fig)
+                    for idx, (plot_name, fig) in enumerate(plot_items, start=1)
+                ]
+                _dl_render_client_side_download_all(ordered_plot_items, iframe_height=100)
         else:
             st.info("No plot data available for export.")
 

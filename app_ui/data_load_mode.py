@@ -1015,6 +1015,9 @@ def _apply_export_layout(fig, plot_name=None, width=None, height=None):
         height=h,
         legend=legend_kw,
         title=dict(x=0.5, xanchor="center"),
+        # Export PNG를 투명 배경으로 저장 (white box 제거)
+        paper_bgcolor="rgba(0,0,0,0)",
+        plot_bgcolor="rgba(0,0,0,0)",
     )
     fig.update_xaxes(showgrid=False, showline=True, mirror=True, ticks="outside", zeroline=False)
     fig.update_yaxes(showgrid=False, showline=True, mirror=True, ticks="outside", zeroline=False)

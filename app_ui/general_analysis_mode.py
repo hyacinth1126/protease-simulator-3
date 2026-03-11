@@ -223,20 +223,35 @@ def general_analysis_mode(st):
     
     # 0순위: Session State 확인 (Data Load 모드에서 방금 실행된 경우)
     if 'interpolation_results' in st.session_state and st.session_state.get('mm_data_ready', False):
+        results = st.session_state['interpolation_results']
+        # Results Applied 메시지는 항상 표시 (예외 시에도 유지)
+        experiment_type = results.get('experiment_type', 'Substrate Concentration Variation (Standard Michaelis-Menten)')
+        result_type = "Substrate-based" if experiment_type == "Substrate Concentration Variation (Standard Michaelis-Menten)" else "Enzyme-based"
+        raw_display = results.get('raw_data_source_display') or results.get('uploaded_filename') or ''
+        if raw_display:
+            st.success(f"Results Applied ({result_type}) — Raw data: **{raw_display}**")
+        else:
+            st.success(f"Results Applied ({result_type})")
         try:
-            results = st.session_state['interpolation_results']
             df_fitted = results['interp_df'].copy()
             rfu_col = 'RFU_Interpolated' if 'RFU_Interpolated' in df_fitted.columns else 'RFU_Calculated'
             st.session_state['data_source_type'] = 'Data Load result (in memory)'
-            # Check experiment_type to display basis
-            experiment_type = results.get('experiment_type', 'Substrate Concentration Variation (Standard Michaelis-Menten)')
-            if experiment_type == "Substrate Concentration Variation (Standard Michaelis-Menten)":
-                result_type = "Substrate-based"
-            else:
-                result_type = "Enzyme-based"
-            st.success(f"Results Applied ({result_type})")
-        except Exception as e:
-            # 메모리 로드 실패 시 파일 로드 시도
+            # Sidebar 값이 Data Load 결과를 따르도록 동기화 (파일명 파싱으로 효소/기질 정보 반영)
+            uploaded_filename = results.get('uploaded_filename')
+            if uploaded_filename:
+                ename, mw, sname = _parse_filename_for_model_simulation(uploaded_filename)
+                if ename is not None:
+                    st.session_state['parsed_enzyme_name'] = ename
+                    st.session_state['model_sim_enzyme_name'] = ename
+                if mw is not None:
+                    st.session_state['parsed_enzyme_mw'] = mw
+                    st.session_state['model_sim_enzyme_mw'] = mw
+                if sname is not None:
+                    st.session_state['parsed_substrate_name'] = sname
+                    st.session_state['model_sim_substrate_name'] = sname
+                st.session_state['last_parsed_filename_for_model'] = uploaded_filename
+        except Exception:
+            # 메모리 로드 실패 시 파일 로드 시도 (아래 uploaded_file/파일 경로 분기로 진행)
             pass
 
     if uploaded_file is not None:

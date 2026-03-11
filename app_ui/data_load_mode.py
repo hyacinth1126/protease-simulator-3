@@ -1147,15 +1147,19 @@ def _render_client_side_download_all(
     payload_json = json.dumps(payload)
 
     status_text_align = "left" if compact else "right"
+    status_margin_bottom = "0px" if compact else "4px"
+    status_min_height = "0px" if compact else "1.2em"
     button_width = "auto" if compact else "100%"
-    button_font_size = "13px" if compact else "14px"
+    button_font_size = "14px"
+    button_padding = "0.25rem 0.75rem" if compact else "8px 12px"
+    button_radius = "0.5rem" if compact else "10px"
     wrapper_justify = "flex-start" if compact else "flex-end"
     html = f"""
-<div id="{div_id}_status" style="text-align:{status_text_align}; font-size:12px; color: rgba(49,51,63,0.65); margin-bottom:4px; min-height:1.2em;"></div>
+<div id="{div_id}_status" style="text-align:{status_text_align}; font-size:12px; color: rgba(49,51,63,0.65); margin-bottom:{status_margin_bottom}; min-height:{status_min_height};"></div>
 <div style="display:flex; align-items:center; justify-content:{wrapper_justify}; gap:10px;">
   <button id="{div_id}_btn" style="
-    padding: 6px 10px; border-radius: 8px; border: 1px solid rgba(49,51,63,0.25);
-    background: white; cursor: pointer; font-size: {button_font_size}; width: {button_width};
+    padding: {button_padding}; border-radius: {button_radius}; border: 1px solid rgba(49,51,63,0.2);
+    background: white; cursor: pointer; font-size: {button_font_size}; width: {button_width}; line-height: 1.6;
   ">
     {button_label}
   </button>
@@ -1511,12 +1515,16 @@ def data_load_mode(st):
             # Last attempt: search in current working directory
             try:
                 raw_data = read_raw_data(default_sample_name)
+                used_path = default_sample_name
                 st.sidebar.info(f"Using {default_sample_name}")
             except Exception as e:
                 st.error(f"Data file not found. Please upload a CSV or XLSX file.\nError: {str(e)}")
                 st.stop()
         else:
             st.sidebar.info(f"Using {used_path}")
+    # Raw data source name for Model Simulation display (upload name or sample path basename)
+    raw_data_source_display = (os.path.basename(uploaded_file.name) if uploaded_file is not None else
+                               (os.path.basename(used_path) if used_path else "raw_data"))
     
     # Data preview
     st.subheader("📋 Data Preview")
@@ -2170,6 +2178,7 @@ def data_load_mode(st):
                 'experiment_type': experiment_type,
                 'normalization_results': normalization_results,  # 정규화 결과 추가
                 'uploaded_filename': os.path.basename(uploaded_file.name) if uploaded_file is not None else None,  # 다운로드 파일명용 (경로 제외)
+                'raw_data_source_display': raw_data_source_display,  # Model Simulation에 표시할 raw 데이터 파일명 (업로드명 또는 샘플 경로)
                 'data_points_per_concentration': data_points_per_conc,
                 'reaction_time_max_min': reaction_time_max_min,
                 'n_replicates': n_value,

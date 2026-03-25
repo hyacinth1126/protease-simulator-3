@@ -2,6 +2,8 @@
 
 단백질 분해 효소(Protease) 반응 시뮬레이션 및 데이터 분석 도구입니다.
 
+배포 사이트: https://protease-kinetics.streamlit.app/
+
 ---
 
 ## 빠른 실행 (venv)
